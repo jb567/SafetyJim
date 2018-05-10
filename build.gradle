@@ -38,8 +38,8 @@ repositories {
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
     compile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.8.0-beta1'
-    jooqRuntime 'postgresql:postgresql:9.1-901.jdbc4'
-    compile 'postgresql:postgresql:9.1-901.jdbc4'
+    jooqRuntime group: 'org.postgresql', name: 'postgresql', version: '42.2.2'
+    compile group: 'org.postgresql', name: 'postgresql', version: '42.2.2'
     compile 'org.jooq:jooq'
     compile 'com.moandjiezana.toml:toml4j:0.7.2'
     compile 'net.dv8tion:JDA:3.5.1_343'
@@ -50,7 +50,8 @@ dependencies {
     compile "io.vertx:vertx-web:3.5.1"
     compile 'com.auth0:java-jwt:3.3.0'
     compile 'com.google.code.gson:gson:2.8.2'
-    compile group: 'log4j', name: 'log4j', version: '1.2.17'
+    compile 'log4j:log4j:1.2.17'
+    compile 'org.reflections:reflections:0.9.11'
 }
 
 jooq {

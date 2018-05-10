@@ -1,4 +1,4 @@
-package org.samoxive.safetyjim.server.routes;
+package org.samoxive.safetyjim.server.endpoints;
 
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
@@ -8,11 +8,11 @@ import org.samoxive.safetyjim.config.Config;
 import org.samoxive.safetyjim.discord.DiscordApiUtils;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.entities.User;
-import org.samoxive.safetyjim.server.RequestHandler;
+import org.samoxive.safetyjim.server.EndpointHandler;
 import org.samoxive.safetyjim.server.Server;
 import org.samoxive.safetyjim.server.ServerUtils;
 
-public class Self extends RequestHandler {
+public class Self extends EndpointHandler {
     public Self(DiscordBot bot, DSLContext database, Server server, Config config) {
         super(bot, database, server, config);
     }

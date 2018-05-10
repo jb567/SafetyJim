@@ -1,8 +1,7 @@
-package org.samoxive.safetyjim.server.routes;
+package org.samoxive.safetyjim.server.endpoints;
 
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
-import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import net.dv8tion.jda.core.entities.Guild;
 import net.dv8tion.jda.core.entities.Member;
@@ -12,14 +11,14 @@ import org.samoxive.safetyjim.config.Config;
 import org.samoxive.safetyjim.database.DatabaseUtils;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.helpers.Pair;
-import org.samoxive.safetyjim.server.RequestHandler;
+import org.samoxive.safetyjim.server.EndpointHandler;
 import org.samoxive.safetyjim.server.Server;
 import org.samoxive.safetyjim.server.ServerUtils;
 import org.samoxive.safetyjim.server.entities.Stat;
 
 import java.util.List;
 
-public class GuildMessageStats extends RequestHandler {
+public class GuildMessageStats extends EndpointHandler {
 
     public GuildMessageStats(DiscordBot bot, DSLContext database, Server server, Config config) {
         super(bot, database, server, config);

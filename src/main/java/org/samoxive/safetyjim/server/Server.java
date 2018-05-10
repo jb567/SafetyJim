@@ -5,11 +5,14 @@ import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
 import org.jooq.DSLContext;
+import org.reflections.Reflections;
 import org.samoxive.safetyjim.config.Config;
 import org.samoxive.safetyjim.discord.DiscordBot;
-import org.samoxive.safetyjim.server.routes.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.lang.reflect.InvocationTargetException;
+import java.util.Objects;
 
 public class Server {
     private Logger log = LoggerFactory.getLogger(Server.class);
@@ -28,16 +31,10 @@ public class Server {
 
         router.route().handler(BodyHandler.create());
 
-        router.get("/login").handler(new Login(bot, database, this, config));
-        router.get("/guilds").handler(new Guilds(bot, database, this, config));
-        router.get("/self").handler(new Self(bot, database, this, config));
-        router.get("/guilds/:guildId/settings").handler(new GetGuildSettings(bot, database, this, config));
-        router.post("/guilds/:guildId/settings").handler(new PostGuildSettings(bot, database, this, config));
-        router.get("/guilds/:guildId/statsOverview").handler(new StatsOverview(bot, database, this, config));
-        router.get("/guilds/:guildId/memberStats").handler(new MemberStats(bot, database, this, config));
-        router.get("/guilds/:guildId/messageStats").handler(new GuildMessageStats(bot, database, this, config));
-        router.get("/guilds/:guildId/messageStats/channels/:channelId").handler(new ChannelMessageStats(bot, database, this, config));
-        router.get("/guilds/:guildId/messageStats/channels").handler(new ChannelsMessageStats(bot, database, this, config));
+        new Reflections("org.samoxive.safetyjim.server.endpoints").getSubTypesOf(EndpointHandler.class).stream()
+                .map(this::initRoute)
+                .filter(Objects::nonNull)
+                .forEach(x -> router.get(x.getEndpoint()).handler(x));
 
         router.options().handler((ctx) -> {
             HttpServerResponse response = ctx.response();
@@ -57,4 +54,15 @@ public class Server {
         log.info("Started web server.");
         
     }
+
+    private EndpointHandler initRoute(Class<? extends EndpointHandler> x) {
+        try {
+            return x.getDeclaredConstructor(DiscordBot.class, DSLContext.class, Server.class, Config.class)
+                    .newInstance(this.bot, this.database, this, this.config);
+        } catch (InstantiationException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
 }

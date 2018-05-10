@@ -1,4 +1,4 @@
-package org.samoxive.safetyjim.server.routes;
+package org.samoxive.safetyjim.server.endpoints;
 
 import com.google.gson.Gson;
 import io.vertx.core.http.HttpServerRequest;
@@ -15,7 +15,7 @@ import org.samoxive.safetyjim.config.Config;
 import org.samoxive.safetyjim.database.DatabaseUtils;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.helpers.Pair;
-import org.samoxive.safetyjim.server.RequestHandler;
+import org.samoxive.safetyjim.server.EndpointHandler;
 import org.samoxive.safetyjim.server.Server;
 import org.samoxive.safetyjim.server.ServerUtils;
 import org.samoxive.safetyjim.server.entities.MemberStatsResponse;
@@ -24,7 +24,7 @@ import org.samoxive.safetyjim.server.entities.Stat;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MemberStats extends RequestHandler {
+public class MemberStats extends EndpointHandler {
     public MemberStats(DiscordBot bot, DSLContext database, Server server, Config config) {
         super(bot, database, server, config);
     }

@@ -1,4 +1,4 @@
-package org.samoxive.safetyjim.server.routes;
+package org.samoxive.safetyjim.server.endpoints;
 
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
@@ -13,14 +13,14 @@ import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordShard;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.commands.Settings;
-import org.samoxive.safetyjim.server.RequestHandler;
+import org.samoxive.safetyjim.server.EndpointHandler;
 import org.samoxive.safetyjim.server.Server;
 import org.samoxive.safetyjim.server.ServerUtils;
 import org.samoxive.safetyjim.server.entities.GuildSettings;
 
 import java.util.Optional;
 
-public class PostGuildSettings extends RequestHandler {
+public class PostGuildSettings extends EndpointHandler {
     public PostGuildSettings(DiscordBot bot, DSLContext database, Server server, Config config) {
         super(bot, database, server, config);
     }

@@ -1,4 +1,4 @@
-package org.samoxive.safetyjim.server.routes;
+package org.samoxive.safetyjim.server.endpoints;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
@@ -13,12 +13,12 @@ import org.samoxive.safetyjim.discord.DiscordApiUtils;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.entities.DiscordSecrets;
 import org.samoxive.safetyjim.discord.entities.SelfUser;
-import org.samoxive.safetyjim.server.RequestHandler;
+import org.samoxive.safetyjim.server.EndpointHandler;
 import org.samoxive.safetyjim.server.Server;
 
 import java.util.Date;
 
-public class Login extends RequestHandler {
+public class Login extends EndpointHandler {
     public Login(DiscordBot bot, DSLContext database, Server server, Config config) {
         super(bot, database, server, config);
     }

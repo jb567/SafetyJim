@@ -9,13 +9,13 @@ import org.jooq.DSLContext;
 import org.samoxive.safetyjim.config.Config;
 import org.samoxive.safetyjim.discord.DiscordBot;
 
-public abstract class RequestHandler implements Handler<RoutingContext> {
+public abstract class EndpointHandler implements Handler<RoutingContext> {
     protected DiscordBot bot;
     protected DSLContext database;
     protected Server server;
     protected Config config;
 
-    public RequestHandler(DiscordBot bot, DSLContext database, Server server, Config config) {
+    public EndpointHandler(DiscordBot bot, DSLContext database, Server server, Config config) {
         this.bot = bot;
         this.database = database;
         this.server = server;
