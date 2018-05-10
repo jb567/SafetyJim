@@ -2,6 +2,7 @@ package org.samoxive.safetyjim.server.routes;
 
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.entities.Guild;
@@ -24,6 +25,11 @@ import java.util.stream.Collectors;
 public class ChannelsMessageStats extends RequestHandler {
     public ChannelsMessageStats(DiscordBot bot, DSLContext database, Server server, Config config) {
         super(bot, database, server, config);
+    }
+
+    @Override
+    public String getEndpoint() {
+        return "/guilds/:guildId/messageStats/channels/";
     }
 
     @Override

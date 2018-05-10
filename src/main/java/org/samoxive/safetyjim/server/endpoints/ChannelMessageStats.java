@@ -2,13 +2,13 @@ package org.samoxive.safetyjim.server.routes;
 
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.entities.Guild;
 import net.dv8tion.jda.core.entities.Member;
+import net.dv8tion.jda.core.entities.TextChannel;
 import org.jooq.DSLContext;
-import org.json.JSONObject;
-import org.samoxive.jooq.generated.Tables;
 import org.samoxive.jooq.generated.tables.records.SettingsRecord;
 import org.samoxive.safetyjim.config.Config;
 import org.samoxive.safetyjim.database.DatabaseUtils;
@@ -17,13 +17,18 @@ import org.samoxive.safetyjim.helpers.Pair;
 import org.samoxive.safetyjim.server.RequestHandler;
 import org.samoxive.safetyjim.server.Server;
 import org.samoxive.safetyjim.server.ServerUtils;
+import org.samoxive.safetyjim.server.entities.Stat;
 
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.List;
 
-public class StatsOverview extends RequestHandler {
-    public StatsOverview(DiscordBot bot, DSLContext database, Server server, Config config) {
+public class ChannelMessageStats extends RequestHandler {
+    public ChannelMessageStats(DiscordBot bot, DSLContext database, Server server, Config config) {
         super(bot, database, server, config);
+    }
+
+    @Override
+    public String getEndpoint() {
+        return "/guilds/:guildId/messageStats/channels/:channelId";
     }
 
     @Override
@@ -42,6 +47,19 @@ public class StatsOverview extends RequestHandler {
         long to = fromToPair.getRight();
 
         Guild guild = member.getGuild();
+        String channelId = request.getParam("channelId");
+        TextChannel channel = guild.getTextChannelById(channelId);
+        if (channel == null) {
+            response.setStatusCode(404);
+            response.end();
+            return;
+        }
+
+        if (!member.hasPermission(channel, Permission.MESSAGE_READ)) {
+            response.setStatusCode(403);
+            response.end();
+            return;
+        }
 
         SettingsRecord settings = DatabaseUtils.getGuildSettings(database, guild);
         if (!settings.getStatistics()) {
@@ -50,22 +68,9 @@ public class StatsOverview extends RequestHandler {
             return;
         }
 
-        Map<String, Integer> channelStats = guild.getTextChannels()
-                                          .stream()
-                                          .filter((channel) -> member.hasPermission(channel, Permission.MESSAGE_READ))
-                                          .collect(Collectors.toMap((channel) -> channel.getName(), (channel) ->
-                                              database.fetchCount(
-                                                      database.selectFrom(Tables.MESSAGES)
-                                                              .where(Tables.MESSAGES.GUILDID.eq(guild.getId()))
-                                                              .and(Tables.MESSAGES.CHANNELID.eq(channel.getId()))
-                                                              .and(Tables.MESSAGES.DATE.between(from, to))
-                                              )
-                                          ));
-
-        JSONObject result = new JSONObject();
-        result.put("delta", to - from);
-        result.put("channelStats", channelStats);
+        int interval = Stat.getPreferredInterval(from, to);
+        List<Stat> stats = Stat.getChannelMessageStats(database, guild.getId(), channelId, from, to, interval);
         response.putHeader("Content-Type", "application/json");
-        response.end(result.toString());
+        response.end(ServerUtils.gson.toJson(stats, stats.getClass()));
     }
 }

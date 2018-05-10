@@ -21,7 +21,7 @@ import java.awt.*;
 import java.util.Scanner;
 import java.util.StringJoiner;
 
-public class Tag extends Command {
+public class Tag implements Command {
     private String[] usages = { "tag list - Shows all tags and responses to user",
                                 "tag <name> - Responds with reponse of the given tag",
                                 "tag add <name> <response> - Adds a tag with the given name and response",

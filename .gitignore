@@ -112,7 +112,7 @@ gradle-app.setting
 # End of https://www.gitignore.io/api/java,intellij,gradle
 
 #.idea misc
-.idea
+.idea/
 
 # Eclipse
 .classpath

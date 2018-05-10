@@ -26,6 +26,11 @@ public class PostGuildSettings extends RequestHandler {
     }
 
     @Override
+    public String getEndpoint() {
+        return "/guilds/:guildId/settings";
+    }
+
+    @Override
     public void handle(RoutingContext ctx, HttpServerRequest request, HttpServerResponse response) {
         Member member = ServerUtils.getMember(bot, request, response, database, config);
         if (member == null) {

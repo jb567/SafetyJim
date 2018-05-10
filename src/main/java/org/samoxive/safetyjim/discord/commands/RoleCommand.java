@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
-public class RoleCommand extends Command {
+public class RoleCommand implements Command {
     private String[] usages = {
             "role add <roleName> - adds a new self-assignable role",
             "role remove <roleName> - removes a self-assignable role",

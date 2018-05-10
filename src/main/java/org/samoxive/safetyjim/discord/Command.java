@@ -2,7 +2,7 @@ package org.samoxive.safetyjim.discord;
 
 import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
 
-public abstract class Command {
-    public abstract String[] getUsages();
-    public abstract boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args);
+public interface Command {
+    String[] getUsages();
+    boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args);
 }

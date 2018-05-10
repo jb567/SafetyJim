@@ -14,7 +14,7 @@ import org.samoxive.safetyjim.helpers.Pair;
 import java.util.Date;
 import java.util.Scanner;
 
-public class Remind extends Command {
+public class Remind implements Command {
     private String[] usages = { "remind message - sets a timer to remind you a message in a day",
                                 "remind message | time - sets a timer to remind you a message in specified time period" };
     @Override

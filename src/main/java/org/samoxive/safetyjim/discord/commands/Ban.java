@@ -19,8 +19,8 @@ import java.awt.*;
 import java.util.Date;
 import java.util.Scanner;
 
-public class Ban extends Command {
-    private String[] usages = { "ban @user [reason] | [time] - bans the user with specific arguments. Both arguments can be omitted" };
+public class Ban implements Command {
+    private String[] usages = {"ban @user [reason] | [time] - bans the user with specific arguments. Both arguments can be omitted"};
 
     @Override
     public String[] getUsages() {
@@ -79,7 +79,7 @@ public class Ban extends Command {
             return false;
         } catch (TextUtils.TimeInputInPastException e) {
             DiscordUtils.failMessage(bot, message, "Your time argument was set for the past. Try again.\n" +
-                                                               "If you're specifying a date, e.g. `30 December`, make sure you also write the year.");
+                    "If you're specifying a date, e.g. `30 December`, make sure you also write the year.");
             return false;
         }
 
@@ -88,14 +88,14 @@ public class Ban extends Command {
         Date expirationDate = parsedReasonAndTime.getRight();
         Date now = new Date();
 
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setTitle("Banned from " + guild.getName());
-        embed.setColor(new Color(0x4286F4));
-        embed.setDescription("You were banned from " + guild.getName());
-        embed.addField("Reason:", TextUtils.truncateForEmbed(reason), false);
-        embed.addField("Banned until", expirationDate != null ? expirationDate.toString() : "Indefinitely", false);
-        embed.setFooter("Banned by " + DiscordUtils.getUserTagAndId(user), null);
-        embed.setTimestamp(now.toInstant());
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("Banned from " + guild.getName())
+                .setColor(new Color(0x4286F4))
+                .setDescription("You were banned from " + guild.getName())
+                .addField("Reason:", TextUtils.truncateForEmbed(reason), false)
+                .addField("Banned until", expirationDate != null ? expirationDate.toString() : "Indefinitely", false)
+                .setFooter("Banned by " + DiscordUtils.getUserTagAndId(user), null)
+                .setTimestamp(now.toInstant());
 
         DiscordUtils.sendDM(banUser, embed.build());
 
@@ -108,24 +108,24 @@ public class Ban extends Command {
             DSLContext database = bot.getDatabase();
 
             BanlistRecord record = database.insertInto(Tables.BANLIST,
-                                                       Tables.BANLIST.USERID,
-                                                       Tables.BANLIST.MODERATORUSERID,
-                                                       Tables.BANLIST.GUILDID,
-                                                       Tables.BANLIST.BANTIME,
-                                                       Tables.BANLIST.EXPIRETIME,
-                                                       Tables.BANLIST.REASON,
-                                                       Tables.BANLIST.EXPIRES,
-                                                       Tables.BANLIST.UNBANNED)
-                                           .values(banUser.getId(),
-                                                   user.getId(),
-                                                   guild.getId(),
-                                                   now.getTime() / 1000,
-                                                   expirationDate != null ? expirationDate.getTime() / 1000 : 0,
-                                                   reason,
-                                                   expires,
-                                                   false)
-                                           .returning(Tables.BANLIST.ID)
-                                           .fetchOne();
+                    Tables.BANLIST.USERID,
+                    Tables.BANLIST.MODERATORUSERID,
+                    Tables.BANLIST.GUILDID,
+                    Tables.BANLIST.BANTIME,
+                    Tables.BANLIST.EXPIRETIME,
+                    Tables.BANLIST.REASON,
+                    Tables.BANLIST.EXPIRES,
+                    Tables.BANLIST.UNBANNED)
+                    .values(banUser.getId(),
+                            user.getId(),
+                            guild.getId(),
+                            now.getTime() / 1000,
+                            expirationDate != null ? expirationDate.getTime() / 1000 : 0,
+                            reason,
+                            expires,
+                            false)
+                    .returning(Tables.BANLIST.ID)
+                    .fetchOne();
 
             int banId = record.getId();
             DiscordUtils.createModLogEntry(bot, shard, message, banMember, reason, "ban", banId, expirationDate, true);

@@ -12,7 +12,7 @@ import org.samoxive.safetyjim.discord.DiscordUtils;
 
 import java.awt.*;
 
-public class Invite extends Command {
+public class Invite implements Command {
     private String[] usages = { "invite - provides the invite link for Jim" };
     private EmbedBuilder embedBuilder;
     private MessageEmbed embed;

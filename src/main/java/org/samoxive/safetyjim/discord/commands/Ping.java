@@ -9,7 +9,7 @@ import org.samoxive.safetyjim.discord.DiscordUtils;
 
 import java.awt.*;
 
-public class Ping extends Command {
+public class Ping implements Command {
     private String[] usages = {"ping - pong"};
 
     @Override

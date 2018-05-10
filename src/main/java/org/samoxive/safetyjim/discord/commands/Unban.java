@@ -15,7 +15,7 @@ import org.samoxive.safetyjim.discord.TextUtils;
 import java.util.List;
 import java.util.Scanner;
 
-public class Unban extends Command {
+public class Unban implements Command {
     private String[] usages = { "unban <tag> - unbans user with specified user tag (example#1998)" };
 
     @Override

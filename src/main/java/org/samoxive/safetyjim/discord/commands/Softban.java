@@ -18,7 +18,7 @@ import java.awt.*;
 import java.util.Date;
 import java.util.Scanner;
 
-public class Softban extends Command {
+public class Softban implements Command {
     private String[] usages = { "softban @user [reason] | [messages to delete (days)] - softbans the user with the specified args." };
 
     @Override

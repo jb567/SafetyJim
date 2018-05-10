@@ -26,6 +26,11 @@ public class Guilds extends RequestHandler {
         super(bot, database, server, config);
     }
 
+    @Override
+    public String getEndpoint() {
+        return "/guilds";
+    }
+
     private static String[] getGuildsOfUser(OauthsecretsRecord record) {
         if (record.getGuilds() != null) {
             return record.getGuilds();

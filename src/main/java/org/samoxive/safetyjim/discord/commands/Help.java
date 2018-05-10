@@ -15,7 +15,7 @@ import java.awt.Color;
 import java.util.HashMap;
 import java.util.StringJoiner;
 
-public class Help extends Command {
+public class Help implements Command {
     private String[] usages = { "help - lists all the available commands and their usage" };
     private MessageEmbed embed = null;
 

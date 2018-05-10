@@ -17,7 +17,7 @@ import java.awt.*;
 import java.util.Date;
 import java.util.Scanner;
 
-public class Warn extends Command {
+public class Warn implements Command {
     private String[] usages = { "warn @user [reason] - warn the user with the specified reason" };
 
     @Override

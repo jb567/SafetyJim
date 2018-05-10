@@ -21,7 +21,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class Info extends Command {
+public class Info implements Command {
     private String[] usages = { "info - displays some information about the bot" };
     private String supportServer = "https://discord.io/safetyjim";
     private String githubLink = "https://github.com/samoxive/safetyjim";

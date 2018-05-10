@@ -14,7 +14,7 @@ import org.samoxive.safetyjim.discord.DiscordUtils;
 
 import java.util.List;
 
-public class Unmute extends Command {
+public class Unmute implements Command {
     private String[] usages = { "unmute @user1 @user2 ... - unmutes specified user" };
 
     @Override

@@ -14,7 +14,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Scanner;
 
-public class Clean extends Command {
+public class Clean implements Command {
     private String[] usages = { "clean <number> - deletes last number of messages",
                                 "clean <number> @user - deletes number of messages from specified user",
                                 "clean <number> bot - deletes number of messages sent from bots" };

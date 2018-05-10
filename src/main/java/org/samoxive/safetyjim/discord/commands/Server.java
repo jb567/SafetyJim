@@ -9,7 +9,7 @@ import org.samoxive.safetyjim.discord.DiscordUtils;
 
 import java.awt.*;
 
-public class Server extends Command {
+public class Server implements Command {
     private String[] usages = { "server - displays information about the current server" };
 
     @Override

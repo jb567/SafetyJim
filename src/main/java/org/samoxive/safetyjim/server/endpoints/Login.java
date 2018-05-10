@@ -23,6 +23,11 @@ public class Login extends RequestHandler {
         super(bot, database, server, config);
     }
 
+    @Override
+    public String getEndpoint() {
+        return "/login";
+    }
+
     private String getJwtToken(String userId) {
         try {
             Algorithm algorithm = Algorithm.HMAC512(config.server.secret);

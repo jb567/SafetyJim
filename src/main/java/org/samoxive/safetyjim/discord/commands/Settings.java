@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.StringJoiner;
 
-public class Settings extends Command {
+public class Settings implements Command {
     private String[] usages = { "settings display - shows current state of settings",
                                 "settings list - lists the keys you can use to customize the bot",
                                 "settings reset - resets every setting to their default value",
@@ -331,5 +331,5 @@ public class Settings extends Command {
         return false;
     }
 
-    private static class BadInputException extends Exception {}
+    private static class BadInputException implements Exception {}
 }

@@ -18,7 +18,7 @@ import java.awt.*;
 import java.util.Date;
 import java.util.Scanner;
 
-public class Kick extends Command {
+public class Kick implements Command {
     private String[] usages = { "kick @user [reason] - kicks the user with the specified reason" };
     @Override
     public String[] getUsages() {

@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
-public class Iam extends Command {
+public class Iam implements Command {
     private String[] usages = { "iam <roleName> - self assigns specified role" };
 
     @Override

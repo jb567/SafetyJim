@@ -3,6 +3,7 @@ package org.samoxive.safetyjim.server;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import org.jooq.DSLContext;
 import org.samoxive.safetyjim.config.Config;
@@ -20,6 +21,9 @@ public abstract class RequestHandler implements Handler<RoutingContext> {
         this.server = server;
         this.config = config;
     }
+
+
+    public abstract String getEndpoint();
 
     public void handle(RoutingContext ctx) {
         handle(ctx, ctx.request(), ctx.response());

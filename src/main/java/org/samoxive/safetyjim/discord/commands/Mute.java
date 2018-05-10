@@ -20,7 +20,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Scanner;
 
-public class Mute extends Command {
+public class Mute implements Command {
     private String[] usages = { "mute @user [reason] | [time] - mutes the user with specific args. Both arguments can be omitted." };
 
     public static Role setupMutedRole(Guild guild) {
