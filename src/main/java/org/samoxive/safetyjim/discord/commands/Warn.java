@@ -21,6 +21,11 @@ public class Warn implements Command {
     private String[] usages = { "warn @user [reason] - warn the user with the specified reason" };
 
     @Override
+    public String command() {
+        return "unwarn";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

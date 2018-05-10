@@ -86,6 +86,11 @@ public class Mute implements Command {
     }
 
     @Override
+    public String command() {
+        return "mute";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

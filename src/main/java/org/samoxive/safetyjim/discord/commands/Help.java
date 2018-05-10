@@ -31,6 +31,11 @@ public class Help implements Command {
     }
 
     @Override
+    public String command() {
+        return "help";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

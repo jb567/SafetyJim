@@ -13,6 +13,11 @@ public class Ping implements Command {
     private String[] usages = {"ping - pong"};
 
     @Override
+    public String command() {
+        return "ping";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

@@ -19,6 +19,11 @@ public class Unban implements Command {
     private String[] usages = { "unban <tag> - unbans user with specified user tag (example#1998)" };
 
     @Override
+    public String command() {
+        return "unban";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

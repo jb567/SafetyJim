@@ -19,6 +19,11 @@ public class Clean implements Command {
                                 "clean <number> @user - deletes number of messages from specified user",
                                 "clean <number> bot - deletes number of messages sent from bots" };
 
+    @Override
+    public String command() {
+        return "clean";
+    }
+
     private List<Message> fetchMessages(TextChannel channel, int messageCount, boolean skipOneMessage, boolean filterBotMessages, boolean filterUserMessages, User filterUser) {
         if (skipOneMessage) {
             messageCount = messageCount == 100 ? 100 : messageCount + 1;

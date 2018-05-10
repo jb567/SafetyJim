@@ -188,6 +188,11 @@ public class Tag implements Command {
     }
 
     @Override
+    public String command() {
+        return "tag";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

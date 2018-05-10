@@ -153,6 +153,11 @@ public class Settings implements Command {
     }
 
     @Override
+    public String command() {
+        return "settings";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }
@@ -331,5 +336,5 @@ public class Settings implements Command {
         return false;
     }
 
-    private static class BadInputException implements Exception {}
+    private static class BadInputException extends Exception {}
 }

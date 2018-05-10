@@ -13,6 +13,11 @@ public class Server implements Command {
     private String[] usages = { "server - displays information about the current server" };
 
     @Override
+    public String command() {
+        return "server";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

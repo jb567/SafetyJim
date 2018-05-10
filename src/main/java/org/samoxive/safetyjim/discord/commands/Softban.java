@@ -22,6 +22,11 @@ public class Softban implements Command {
     private String[] usages = { "softban @user [reason] | [messages to delete (days)] - softbans the user with the specified args." };
 
     @Override
+    public String command() {
+        return "softban";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

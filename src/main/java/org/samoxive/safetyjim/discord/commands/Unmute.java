@@ -18,6 +18,11 @@ public class Unmute implements Command {
     private String[] usages = { "unmute @user1 @user2 ... - unmutes specified user" };
 
     @Override
+    public String command() {
+        return "unmute";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

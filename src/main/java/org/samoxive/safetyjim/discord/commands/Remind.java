@@ -17,6 +17,12 @@ import java.util.Scanner;
 public class Remind implements Command {
     private String[] usages = { "remind message - sets a timer to remind you a message in a day",
                                 "remind message | time - sets a timer to remind you a message in specified time period" };
+
+    @Override
+    public String command() {
+        return "remind";
+    }
+
     @Override
     public String[] getUsages() {
         return usages;

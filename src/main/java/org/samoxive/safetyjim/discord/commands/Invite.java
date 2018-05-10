@@ -41,6 +41,11 @@ public class Invite implements Command {
     }
 
     @Override
+    public String command() {
+        return "invite";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

@@ -29,6 +29,11 @@ public class Info implements Command {
     private PrettyTime prettyTime = new PrettyTime();
 
     @Override
+    public String command() {
+        return "info";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

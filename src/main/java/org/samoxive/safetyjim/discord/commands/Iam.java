@@ -20,6 +20,11 @@ public class Iam implements Command {
     private String[] usages = { "iam <roleName> - self assigns specified role" };
 
     @Override
+    public String command() {
+        return "iam";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }

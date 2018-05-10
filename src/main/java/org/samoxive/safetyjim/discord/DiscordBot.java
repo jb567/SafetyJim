@@ -1,5 +1,7 @@
 package org.samoxive.safetyjim.discord;
 
+import com.google.common.base.Functions;
+import com.google.common.collect.Maps;
 import net.dv8tion.jda.core.*;
 import net.dv8tion.jda.core.entities.*;
 import net.dv8tion.jda.core.managers.GuildController;
@@ -9,6 +11,7 @@ import okhttp3.*;
 import org.jooq.DSLContext;
 import org.jooq.Result;
 import org.json.JSONObject;
+import org.reflections.Reflections;
 import org.samoxive.jooq.generated.Tables;
 import org.samoxive.jooq.generated.tables.Oauthsecrets;
 import org.samoxive.jooq.generated.tables.records.*;
@@ -30,6 +33,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class DiscordBot {
@@ -92,24 +96,19 @@ public class DiscordBot {
     }
 
     private void loadCommands() {
-        commands.put("ping", new Ping());
-        commands.put("unmute", new Unmute());
-        commands.put("invite", new Invite());
-        commands.put("ban", new Ban());
-        commands.put("kick", new Kick());
-        commands.put("mute", new Mute());
-        commands.put("warn", new Warn());
-        commands.put("help", new Help());
-        commands.put("clean", new Clean());
-        commands.put("tag", new Tag());
-        commands.put("remind", new Remind());
-        commands.put("info", new Info());
-        commands.put("settings", new Settings());
-        commands.put("softban", new Softban());
-        commands.put("unban", new Unban());
-        commands.put("server", new Server());
-        commands.put("iam", new Iam());
-        commands.put("role", new RoleCommand());
+        new Reflections("org.samoxive.safetyjim.discord.commands")
+                .getSubTypesOf(Command.class)
+                .stream()
+                .map(x -> {
+                    try {
+                        return x.newInstance();
+                    } catch (InstantiationException | IllegalAccessException e) {
+                        e.printStackTrace();
+                    }
+                    return null;
+                })
+                .filter(Objects::nonNull)
+                .forEach(x -> commands.put(x.command(),x));
     }
 
     private void loadProcessors() {
@@ -126,7 +125,7 @@ public class DiscordBot {
               .map(guild -> {
                   MembercountsRecord record = database.newRecord(Tables.MEMBERCOUNTS);
                   List<Member> members = guild.getMembers();
-                  long onlineCount = members.stream().filter((member -> DiscordUtils.isOnline(member))).count();
+                  long onlineCount = members.stream().filter(DiscordUtils::isOnline).count();
                   record.setGuildid(guild.getId());
                   record.setDate((new Date()).getTime());
                   record.setOnlinecount((int)onlineCount);
@@ -193,10 +192,11 @@ public class DiscordBot {
         long currentTime = System.currentTimeMillis() / 1000;
 
         Result<BanlistRecord> usersToBeUnbanned = database.selectFrom(Tables.BANLIST)
-                                                          .where(Tables.BANLIST.UNBANNED.eq(false))
-                                                          .and(Tables.BANLIST.EXPIRES.eq(true))
-                                                          .and(Tables.BANLIST.EXPIRETIME.lt(currentTime))
-                                                          .fetch();
+                                                          .where(
+                                                                  Tables.BANLIST.UNBANNED.eq(false))
+                                                                  .and(Tables.BANLIST.EXPIRES.eq(true))
+                                                                  .and(Tables.BANLIST.EXPIRETIME.lt(currentTime)
+                                                          ).fetch();
 
         for (BanlistRecord user: usersToBeUnbanned) {
             String guildId = user.getGuildid();
@@ -239,9 +239,11 @@ public class DiscordBot {
         long currentTime = System.currentTimeMillis() / 1000;
 
         Result<MutelistRecord> usersToBeUnmuted = database.selectFrom(Tables.MUTELIST)
-                .where(Tables.MUTELIST.UNMUTED.eq(false))
-                .and(Tables.MUTELIST.EXPIRES.eq(true))
-                .and(Tables.MUTELIST.EXPIRETIME.lt(currentTime))
+                .where(
+                        Tables.MUTELIST.UNMUTED.eq(false))
+                            .and(Tables.MUTELIST.EXPIRES.eq(true))
+                            .and(Tables.MUTELIST.EXPIRETIME.lt(currentTime)
+                      )
                 .fetch();
 
         for (MutelistRecord user: usersToBeUnmuted) {
@@ -267,7 +269,7 @@ public class DiscordBot {
             }
 
             List<Role> mutedRoles = guild.getRolesByName("Muted", false);
-            Role role = null;
+            Role role;
             if (mutedRoles.isEmpty()) {
                 try {
                     role = Mute.setupMutedRole(guild);

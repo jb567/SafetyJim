@@ -73,7 +73,7 @@ public class DiscordShard extends ListenerAdapter {
         shard.getGuilds()
              .stream()
              .filter((guild) -> DatabaseUtils.getGuildSettings(database, guild).getStatistics())
-             .forEach((guild -> populateGuildStatistics(guild)));
+             .forEach(this::populateGuildStatistics);
     }
 
     public void populateGuildStatistics(Guild guild) {

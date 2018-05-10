@@ -20,6 +20,11 @@ import java.util.Date;
 import java.util.Scanner;
 
 public class Ban implements Command {
+
+    public String command() {
+        return "ban";
+    }
+
     private String[] usages = {"ban @user [reason] | [time] - bans the user with specific arguments. Both arguments can be omitted"};
 
     @Override

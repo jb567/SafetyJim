@@ -20,6 +20,12 @@ import java.util.Scanner;
 
 public class Kick implements Command {
     private String[] usages = { "kick @user [reason] - kicks the user with the specified reason" };
+
+    @Override
+    public String command() {
+        return "kick";
+    }
+
     @Override
     public String[] getUsages() {
         return usages;

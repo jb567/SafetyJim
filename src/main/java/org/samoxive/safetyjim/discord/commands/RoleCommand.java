@@ -22,6 +22,11 @@ public class RoleCommand implements Command {
     };
 
     @Override
+    public String command() {
+        return "role";
+    }
+
+    @Override
     public String[] getUsages() {
         return usages;
     }
