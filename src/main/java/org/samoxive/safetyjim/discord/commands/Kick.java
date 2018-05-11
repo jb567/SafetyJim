@@ -13,6 +13,7 @@ import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.TextUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
 import java.awt.*;
 import java.util.Date;
@@ -32,19 +33,13 @@ public class Kick implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser kicker, DiscordChannel channel, long ping, String args) {
         Scanner messageIterator = new Scanner(args);
-        JDA shard = event.getJDA();
 
-        Member member = event.getMember();
-        User user = event.getAuthor();
-        Message message = event.getMessage();
-        TextChannel channel = event.getChannel();
-        Guild guild = event.getGuild();
-        Member selfMember = guild.getSelfMember();
+        DiscordUser botAccount = guild.getBotAccount();
 
-        if (!member.hasPermission(Permission.KICK_MEMBERS)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to execute this command! Required permission: Kick Members");
+        if (!kicker.hasPermission(Permission.KICK_MEMBERS)) {
+            message.fail("You don't have enough permissions to execute this command! Required permission: Kick Members");
             return false;
         }
 
@@ -55,22 +50,20 @@ public class Kick implements Command {
             messageIterator.next();
         }
 
-        User kickUser = message.getMentionedUsers().get(0);
-        Member kickMember = guild.getMember(kickUser);
-        GuildController controller = guild.getController();
+        DiscordUser kickee = message.firstMentionedMember();
 
-        if (!selfMember.hasPermission(Permission.KICK_MEMBERS)) {
-            DiscordUtils.failMessage(bot, message, "I don't have enough permissions to do that!");
+        if (!botAccount.hasPermission(Permission.KICK_MEMBERS)) {
+            message.fail("I don't have enough permissions to do that!");
             return false;
         }
 
-        if (user.getId().equals(kickUser.getId())) {
-            DiscordUtils.failMessage(bot, message, "You can't kick yourself, dummy!");
+        if (kicker.equals(kickee)) {
+            message.fail("You can't kick yourself, dummy!");
             return false;
         }
 
-        if (!DiscordUtils.isKickable(kickMember, selfMember)) {
-            DiscordUtils.failMessage(bot, message, "I don't have enough permissions to do that!");
+        if (botAccount.canKick(kickee)) {
+            message.fail("I don't have enough permissions to do that!");
             return false;
         }
 
@@ -79,20 +72,20 @@ public class Kick implements Command {
 
         Date now = new Date();
 
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setTitle("Kicked from " + guild.getName());
-        embed.setColor(new Color(0x4286F4));
-        embed.setDescription("You were kicked from " + guild.getName());
-        embed.addField("Reason:", TextUtils.truncateForEmbed(reason), false);
-        embed.setFooter("Kicked by " + DiscordUtils.getUserTagAndId(user), null);
-        embed.setTimestamp(now.toInstant());
+        EmbedBuilder embed = new EmbedBuilder()
+            .setTitle("Kicked from " + guild.getName())
+        .setColor(new Color(0x4286F4))
+        .setDescription("You were kicked from " + guild.getName())
+        .addField("Reason:", TextUtils.truncateForEmbed(reason), false)
+        .setFooter("Kicked by " + kicker.getTagAndId(), null)
+        .setTimestamp(now.toInstant());
 
-        DiscordUtils.sendDM(kickUser, embed.build());
+        kickee.sendDM(embed.build());
 
         try {
-            String auditLogReason = String.format("Kicked by %s - %s", DiscordUtils.getUserTagAndId(user), reason);
-            controller.kick(kickMember, auditLogReason).complete();
-            DiscordUtils.successReact(bot, message);
+            String auditLogReason = String.format("Kicked by %s - %s", kicker.getTagAndId(), reason);
+            guild.kick(kickee, auditLogReason);
+            message.reactSuccess();
 
             DSLContext database = bot.getDatabase();
 
@@ -102,18 +95,18 @@ public class Kick implements Command {
                                                         Tables.KICKLIST.GUILDID,
                                                         Tables.KICKLIST.KICKTIME,
                                                         Tables.KICKLIST.REASON)
-                                            .values(kickUser.getId(),
-                                                    user.getId(),
+                                            .values(kickee.getId(),
+                                                    kicker.getId(),
                                                     guild.getId(),
                                                     now.getTime() / 1000,
                                                     reason)
                                             .returning(Tables.KICKLIST.ID)
                                             .fetchOne();
 
-            DiscordUtils.createModLogEntry(bot, shard, message, kickMember, reason, "kick", record.getId(), null, false);
-            DiscordUtils.sendMessage(channel, "Kicked " + DiscordUtils.getUserTagAndId(kickUser));
+            DiscordUtils.createModLogEntry(bot, guild, message,  kickee, kicker, reason, "kick", record.getId(), null, false);
+            channel.sendMessage("Kicked " + kickee.getTagAndId());
         } catch (Exception e) {
-            DiscordUtils.failMessage(bot, message, "Could not kick the specified user. Do I have enough permissions?");
+            message.fail("Could not kick the specified user. Do I have enough permissions?");
         }
 
         return false;

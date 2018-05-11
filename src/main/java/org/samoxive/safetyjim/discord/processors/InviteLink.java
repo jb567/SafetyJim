@@ -10,6 +10,10 @@ import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordShard;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.MessageProcessor;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordChannel;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordGuild;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordMessage;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordUser;
 
 public class InviteLink extends MessageProcessor {
     private String[] blacklistedHosts = { "discord.gg/" };
@@ -23,21 +27,19 @@ public class InviteLink extends MessageProcessor {
     };
 
     @Override
-    public boolean onMessage(DiscordBot bot, DiscordShard shard, GuildMessageReceivedEvent event) {
-        Message message = event.getMessage();
-        Member member = event.getMember();
+    public boolean onMessage(DiscordBot bot, DiscordShard shard, DiscordGuild guild, DiscordMessage message, DiscordUser poster, DiscordChannel channel) {
         for (Permission permission: whitelistedPermissions) {
-            if (member.hasPermission(permission)) {
+            if (poster.hasPermission(permission)) {
                 return false;
             }
         }
 
-        boolean processorEnabled = DatabaseUtils.getGuildSettings(bot.getDatabase(), event.getGuild()).getInvitelinkremover();
+        boolean processorEnabled = guild.getSettings(bot).getInvitelinkremover();
         if (!processorEnabled) {
             return false;
         }
 
-        String content = message.getContentRaw();
+        String content = message.getText();
 
         boolean inviteLinkExists = false;
         for (String blacklistedHost: blacklistedHosts) {
@@ -51,8 +53,8 @@ public class InviteLink extends MessageProcessor {
         }
 
         try {
-            message.delete().complete();
-            DiscordUtils.sendMessage(event.getChannel(), "I'm sorry " + member.getAsMention() + ", you can't send invite links here.");
+            message.futureDelete().complete();
+            channel.sendMessage( "I'm sorry " + poster.getMention() + ", you can't send invite links here.");
         } catch (InsufficientPermissionException e) {
             return false;
         } catch (Exception e) {

@@ -13,6 +13,7 @@ import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.TextUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
 import java.awt.*;
 import java.util.Date;
@@ -32,19 +33,13 @@ public class Softban implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser banner, DiscordChannel channel, long ping, String args) {
         Scanner messageIterator = new Scanner(args);
-        JDA shard = event.getJDA();
 
-        Member member = event.getMember();
-        User user = event.getAuthor();
-        Message message = event.getMessage();
-        TextChannel channel = event.getChannel();
-        Guild guild = event.getGuild();
-        Member selfMember = guild.getSelfMember();
+        DiscordUser selfMember = guild.getBotAccount();
 
-        if (!member.hasPermission(Permission.BAN_MEMBERS)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to execute this command! Required permission: Ban Members");
+        if (!banner.hasPermission(Permission.BAN_MEMBERS)) {
+            message.fail("You don't have enough permissions to execute this command! Required permission: Ban Members");
             return false;
         }
 
@@ -55,22 +50,20 @@ public class Softban implements Command {
             messageIterator.next();
         }
 
-        User softbanUser = message.getMentionedUsers().get(0);
-        Member softbanMember = guild.getMember(softbanUser);
-        GuildController controller = guild.getController();
+        DiscordUser softbanUser = message.firstMentionedMember();
 
         if (!selfMember.hasPermission(Permission.BAN_MEMBERS)) {
-            DiscordUtils.failMessage(bot, message, "I don't have enough permissions to do that!");
+            message.fail("I don't have enough permissions to do that!");
             return false;
         }
 
-        if (user.getId().equals(softbanUser.getId())) {
-            DiscordUtils.failMessage(bot, message, "You can't softban yourself, dummy!");
+        if (banner.equals(softbanUser)) {
+            message.fail("You can't softban yourself, dummy!");
             return false;
         }
 
-        if (!DiscordUtils.isBannable(softbanMember, selfMember)) {
-            DiscordUtils.failMessage(bot, message, "I don't have enough permissions to do that!");
+        if (!selfMember.canBan(softbanUser)) {
+            message.fail("I don't have enough permissions to do that!");
             return false;
         }
 
@@ -90,7 +83,7 @@ public class Softban implements Command {
             try {
                 days = Integer.parseInt(timeArgument.trim());
             } catch (NumberFormatException e) {
-                DiscordUtils.failMessage(bot, message, "Invalid day count, please try again.");
+                message.fail("Invalid day count, please try again.");
                 return false;
             }
         } else {
@@ -98,7 +91,7 @@ public class Softban implements Command {
         }
 
         if (days < 1 || days > 7) {
-            DiscordUtils.failMessage(bot, message, "The amount of days must be between 1 and 7.");
+            message.fail("The amount of days must be between 1 and 7.");
             return false;
         }
 
@@ -109,15 +102,15 @@ public class Softban implements Command {
         embed.setColor(new Color(0x4286F4));
         embed.setDescription("You were softbanned from " + guild.getName());
         embed.addField("Reason:", TextUtils.truncateForEmbed(reason), false);
-        embed.setFooter("Softbanned by " + DiscordUtils.getUserTagAndId(user), null);
+        embed.setFooter("Softbanned by " + banner.getTagAndId(), null);
         embed.setTimestamp(now.toInstant());
 
-        DiscordUtils.sendDM(softbanUser, embed.build());
+        softbanUser.sendDM(embed.build());
 
         try {
-            String auditLogReason = String.format("Softbanned by %s - %s", DiscordUtils.getUserTagAndId(user), reason);
-            controller.ban(softbanMember, days, auditLogReason).complete();
-            controller.unban(softbanUser).complete();
+            String auditLogReason = String.format("Softbanned by %s - %s", banner.getTagAndId(), reason);
+            guild.ban(softbanUser, days, auditLogReason);
+            guild.unban(softbanUser);
 
             DSLContext database = bot.getDatabase();
 
@@ -129,7 +122,7 @@ public class Softban implements Command {
                                                            Tables.SOFTBANLIST.DELETEDAYS,
                                                            Tables.SOFTBANLIST.REASON)
                                                .values(softbanUser.getId(),
-                                                       user.getId(),
+                                                       banner.getId(),
                                                        guild.getId(),
                                                        now.getTime() / 1000,
                                                        days,
@@ -137,12 +130,11 @@ public class Softban implements Command {
                                                .returning(Tables.SOFTBANLIST.ID)
                                                .fetchOne();
 
-            DiscordUtils.createModLogEntry(bot, shard, message, softbanMember, reason, "softban", record.getId(), null, false);
-            DiscordUtils.sendMessage(channel, "Softbanned " + DiscordUtils.getUserTagAndId(softbanUser));
+            DiscordUtils.createModLogEntry(bot, guild, message, softbanUser, banner, reason, "softban", record.getId(), null, false);
+            channel.sendMessage("Softbanned " + softbanUser.getTagAndId());
         } catch (Exception e) {
-            DiscordUtils.failMessage(bot, message, "Could not softban the specified user. Do I have enough permissions?");
+            message.fail("Could not softban the specified user. Do I have enough permissions?");
         }
-
         return false;
     }
 }

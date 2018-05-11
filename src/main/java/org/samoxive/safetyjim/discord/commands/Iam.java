@@ -11,8 +11,10 @@ import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.TextUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
@@ -30,13 +32,9 @@ public class Iam implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser poster, DiscordChannel channel, long ping, String args) {
         Scanner messageIterator = new Scanner(args);
         DSLContext database = bot.getDatabase();
-
-        Member member = event.getMember();
-        Message message = event.getMessage();
-        Guild guild = event.getGuild();
 
         String roleName = TextUtils.seekScannerToEnd(messageIterator)
                                    .toLowerCase();
@@ -45,17 +43,17 @@ public class Iam implements Command {
             return true;
         }
 
-        List<Role> matchingRoles = guild.getRoles()
+        Optional<DiscordRole> matchingRoles = guild.getRoles()
                                         .stream()
                                         .filter((role) -> role.getName().toLowerCase().equals(roleName))
-                                        .collect(Collectors.toList());
+                                        .findFirst();
 
-        if (matchingRoles.size() == 0) {
-            DiscordUtils.failMessage(bot, message, "Could not find a role with specified name!");
+        if (!matchingRoles.isPresent()) {
+            message.fail("Could not find a role with specified name!");
             return false;
         }
 
-        Role matchedRole = matchingRoles.get(0);
+        DiscordRole matchedRole = matchingRoles.get();
         Result<RolelistRecord> assignableRoles = database.selectFrom(Tables.ROLELIST)
                                                          .where(Tables.ROLELIST.GUILDID.eq(guild.getId()))
                                                          .and(Tables.ROLELIST.ROLEID.eq(matchedRole.getId()))
@@ -69,17 +67,15 @@ public class Iam implements Command {
         }
 
         if (!roleExists) {
-            DiscordUtils.failMessage(bot, message, "This role is not self-assignable!");
+            message.fail("This role is not self-assignable!");
             return false;
         }
 
-        GuildController controller = guild.getController();
-
         try {
-            controller.addSingleRoleToMember(member, matchedRole).complete();
-            DiscordUtils.successReact(bot, message);
+            guild.addRoleToUser(poster, matchedRole);
+            message.reactSuccess();
         } catch (Exception e) {
-            DiscordUtils.failMessage(bot, message, "Could not assign specified role. Do I have enough permissions?");
+            message.fail("Could not assign specified role. Do I have enough permissions?");
         }
 
         return false;

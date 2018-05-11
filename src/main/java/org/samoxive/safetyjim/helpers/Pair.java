@@ -1,5 +1,8 @@
 package org.samoxive.safetyjim.helpers;
 
+import lombok.Getter;
+
+@Getter
 public class Pair<A, B> {
     private A left;
     private B right;
@@ -9,11 +12,8 @@ public class Pair<A, B> {
         this.right = right;
     }
 
-    public A getLeft() {
-        return left;
-    }
 
-    public B getRight() {
-        return right;
+    public static <A, B> Pair<A,B> of(A left, B right) {
+        return new Pair<>(left, right);
     }
 }

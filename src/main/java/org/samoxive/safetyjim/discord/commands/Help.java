@@ -10,6 +10,7 @@ import org.samoxive.safetyjim.database.DatabaseUtils;
 import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
 import java.awt.Color;
 import java.util.HashMap;
@@ -41,21 +42,18 @@ public class Help implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser poster, DiscordChannel channel, long ping, String args) {
         if (embed == null) {
-            JDA shard = event.getJDA();
-            DSLContext database = bot.getDatabase();
-            Guild guild = event.getGuild();
             EmbedBuilder builder = new EmbedBuilder();
-            builder.setAuthor("Safety Jim - Commands", null, shard.getSelfUser().getAvatarUrl());
-            builder.setDescription(getUsageTexts(bot, DatabaseUtils.getGuildSettings(database, guild).getPrefix()));
+            builder.setAuthor("Safety Jim - Commands", null, guild.getBotAccount().getAvatarURL());
+            builder.setDescription(getUsageTexts(bot, guild.getSettings(bot).getPrefix()));
             builder.setColor(new Color(0x4286F4));
 
             embed = builder.build();
         }
 
-        DiscordUtils.successReact(bot, event.getMessage());
-        DiscordUtils.sendMessage(event.getChannel(), embed);
+        message.reactSuccess();
+        channel.sendMessage(embed);
         return false;
     }
 }

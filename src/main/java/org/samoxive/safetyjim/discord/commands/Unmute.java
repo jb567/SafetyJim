@@ -11,6 +11,7 @@ import org.samoxive.jooq.generated.tables.records.MutelistRecord;
 import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
 import java.util.List;
 
@@ -28,22 +29,18 @@ public class Unmute implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
-        Member member = event.getMember();
-        Message message = event.getMessage();
-        Guild guild = event.getGuild();
-        GuildController controller = guild.getController();
-        List<User> mentions = message.getMentionedUsers();
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser author, DiscordChannel channel, long ping, String args) {
+        List<DiscordUser> mentions = message.getMentionedUsers();
 
         DSLContext database = bot.getDatabase();
 
-        if (!member.hasPermission(Permission.MANAGE_ROLES)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to execute this command! Required permission: Manage Roles");
+        if (!author.hasPermission(Permission.MANAGE_ROLES)) {
+            message.fail("You don't have enough permissions to execute this command! Required permission: Manage Roles");
             return false;
         }
 
-        if (!guild.getSelfMember().hasPermission(Permission.MANAGE_ROLES)) {
-            DiscordUtils.failMessage(bot, message, "I don't have enough permissions do this action!");
+        if (!guild.getBotAccount().hasPermission(Permission.MANAGE_ROLES)) {
+            message.fail("I don't have enough permissions do this action!");
             return false;
         }
 
@@ -52,16 +49,15 @@ public class Unmute implements Command {
             return true;
         }
 
-        List<Role> mutedRoles = guild.getRolesByName("Muted", false);
+        List<DiscordRole> mutedRoles = guild.getRolesByName("Muted");
         if (mutedRoles.size() == 0) {
-            DiscordUtils.failMessage(bot, message, "Could not find a role called Muted, please create one yourself or mute a user to set it up automatically.");
+            message.fail("Could not find a role called Muted, please create one yourself or mute a user to set it up automatically.");
             return false;
         }
 
-        Role muteRole = mutedRoles.get(0);
-        for (User unmuteUser: mentions) {
-            Member unmuteMember = guild.getMember(unmuteUser);
-            controller.removeSingleRoleFromMember(unmuteMember, muteRole).queue();
+        DiscordRole muteRole = mutedRoles.get(0);
+        for (DiscordUser unmuteUser: mentions) {
+            guild.removeSingleRole(unmuteUser, muteRole);
             Result<MutelistRecord> records = database.selectFrom(Tables.MUTELIST)
                     .where(Tables.MUTELIST.USERID.eq(unmuteUser.getId()))
                     .and(Tables.MUTELIST.GUILDID.eq(guild.getId()))
@@ -77,7 +73,7 @@ public class Unmute implements Command {
             }
         }
 
-        DiscordUtils.successReact(bot, message);
+        message.reactSuccess();
         return false;
     }
 }

@@ -1,10 +1,7 @@
 package org.samoxive.safetyjim.discord.commands;
 
 import net.dv8tion.jda.core.EmbedBuilder;
-import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.Permission;
-import net.dv8tion.jda.core.entities.*;
-import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
 import org.jooq.DSLContext;
 import org.samoxive.jooq.generated.Tables;
 import org.samoxive.jooq.generated.tables.records.MembercountsRecord;
@@ -14,84 +11,80 @@ import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.TextUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
-import java.awt.Color;
+import java.awt.*;
 import java.util.Date;
-import java.util.List;
+import java.util.Optional;
 import java.util.Scanner;
 import java.util.StringJoiner;
 
 public class Settings implements Command {
-    private String[] usages = { "settings display - shows current state of settings",
-                                "settings list - lists the keys you can use to customize the bot",
-                                "settings reset - resets every setting to their default value",
-                                "settings set <key> <value> - changes given key\'s value" };
+    private String[] usages = {"settings display - shows current state of settings",
+            "settings list - lists the keys you can use to customize the bot",
+            "settings reset - resets every setting to their default value",
+            "settings set <key> <value> - changes given key\'s value"};
 
-    private String[] settingKeys = { "modlog",
-                                     "modlogchannel",
-                                     "holdingroomrole",
-                                     "holdingroom",
-                                     "holdingroomminutes",
-                                     "prefix",
-                                     "welcomemessage",
-                                     "message",
-                                     "welcomemessagechannel",
-                                     "invitelinkremover",
-                                     "silentcommands",
-                                     "nospaceprefix",
-                                     "statistics" };
+    private String[] settingKeys = {"modlog",
+            "modlogchannel",
+            "holdingroomrole",
+            "holdingroom",
+            "holdingroomminutes",
+            "prefix",
+            "welcomemessage",
+            "message",
+            "welcomemessagechannel",
+            "invitelinkremover",
+            "silentcommands",
+            "nospaceprefix",
+            "statistics"};
 
     private String settingsListString = "`HoldingRoom <enabled/disabled>` - Default: disabled\n" +
-                                        "`HoldingRoomMinutes <number>` - Default: 3\n" +
-                                        "`HoldingRoomRole <text>` - Default: None\n" +
-                                        "`ModLog <enabled/disabled>` - Default: disabled\n" +
-                                        "`ModLogChannel <#channel>` - Default: %s\n" +
-                                        "`Prefix <text>` - Default: -mod\n" +
-                                        "`WelcomeMessage <enabled/disabled>` - Default: disabled\n" +
-                                        "`WelcomeMessageChannel <#channel>` - Default: %s\n" +
-                                        "`Message <text>` - Default: " + DatabaseUtils.DEFAULT_WELCOME_MESSAGE + "\n" +
-                                        "`InviteLinkRemover <enabled/disabled>` - Default: disabled\n" +
-                                        "`SilentCommands <enabled/disabled>` - Default: disabled\n" +
-                                        "`NoSpacePrefix <enabled/disabled>` - Default: disabled\n" +
-                                        "`Statistics <enabled/disabled>` - Default: disabled";
+            "`HoldingRoomMinutes <number>` - Default: 3\n" +
+            "`HoldingRoomRole <text>` - Default: None\n" +
+            "`ModLog <enabled/disabled>` - Default: disabled\n" +
+            "`ModLogChannel <#channel>` - Default: %s\n" +
+            "`Prefix <text>` - Default: -mod\n" +
+            "`WelcomeMessage <enabled/disabled>` - Default: disabled\n" +
+            "`WelcomeMessageChannel <#channel>` - Default: %s\n" +
+            "`Message <text>` - Default: " + DatabaseUtils.DEFAULT_WELCOME_MESSAGE + "\n" +
+            "`InviteLinkRemover <enabled/disabled>` - Default: disabled\n" +
+            "`SilentCommands <enabled/disabled>` - Default: disabled\n" +
+            "`NoSpacePrefix <enabled/disabled>` - Default: disabled\n" +
+            "`Statistics <enabled/disabled>` - Default: disabled";
 
-    private void handleSettingsDisplay(DiscordBot bot, GuildMessageReceivedEvent event) {
-        JDA shard = event.getJDA();
-        TextChannel channel = event.getChannel();
-        Message message = event.getMessage();
-        SelfUser selfUser = shard.getSelfUser();
-        String output = getSettingsString(bot, event);
+    private void handleSettingsDisplay(DiscordBot bot, DiscordChannel channel, DiscordMessage message,
+                                       DiscordUser selfUser, DiscordGuild guild) {
+        String output = getSettingsString(bot, guild);
 
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setAuthor("Safety Jim", null, selfUser.getAvatarUrl());
-        embed.addField("Guild Settings", output, false);
-        embed.setColor(new Color(0x4286F4));
+        EmbedBuilder embed = new EmbedBuilder()
+                .setAuthor("Safety Jim", null, selfUser.getAvatarURL())
+                .addField("Guild Settings", output, false)
+                .setColor(new Color(0x4286F4));
 
-        DiscordUtils.successReact(bot, message);
-        DiscordUtils.sendMessage(channel, embed.build());
+        message.reactSuccess();
+        channel.sendMessage(embed.build());
     }
 
-    private String getSettingsString(DiscordBot bot, GuildMessageReceivedEvent event) {
-        DSLContext database = bot.getDatabase();
-        Guild guild = event.getGuild();
+    private String getSettingsString(DiscordBot bot, DiscordGuild guild) {
 
-        SettingsRecord config = DatabaseUtils.getGuildSettings(database, guild);
+        SettingsRecord config = guild.getSettings(bot);
         StringJoiner output = new StringJoiner("\n");
 
         if (!config.getModlog()) {
             output.add("**Mod Log:** Disabled");
         } else {
-            TextChannel modLogChannel = guild.getTextChannelById(config.getModlogchannelid());
+            DiscordChannel modLogChannel = guild.getChannelById(config.getModlogchannelid());
             output.add("**Mod Log:** Enabled");
-            output.add("\t**Mod Log Channel:** " + (modLogChannel == null ? "null" : modLogChannel.getAsMention()));
+            output.add("\t**Mod Log Channel:** " + (modLogChannel == null ? "null" : modLogChannel.getMention()));
         }
 
         if (!config.getWelcomemessage()) {
             output.add("**Welcome Messages:** Disabled");
         } else {
-            TextChannel welcomeMessageChannel = guild.getTextChannelById(config.getWelcomemessagechannelid());
+            DiscordChannel welcomeMessageChannel = guild.getChannelById(config.getWelcomemessagechannelid());
             output.add("**Welcome Messages:** Enabled");
-            output.add("\t**Welcome Message Channel:** " + (welcomeMessageChannel == null ? "null" : welcomeMessageChannel.getAsMention()));
+            output.add("\t**Welcome Message Channel:** " + (welcomeMessageChannel == null ? "null" : welcomeMessageChannel.getMention()));
         }
 
         if (!config.getHoldingroom()) {
@@ -99,7 +92,7 @@ public class Settings implements Command {
         } else {
             int holdingRoomMinutes = config.getHoldingroomminutes();
             String holdingRoomRoleId = config.getHoldingroomroleid();
-            Role holdingRoomRole = guild.getRoleById(holdingRoomRoleId);
+            DiscordRole holdingRoomRole = guild.getRoleById(holdingRoomRoleId);
             output.add("**Holding Room:** Enabled");
             output.add("\t**Holding Room Role:** " + (holdingRoomRole == null ? "null" : holdingRoomRole.getName()));
             output.add("\t**Holding Room Delay:** " + holdingRoomMinutes + " minute(s)");
@@ -131,14 +124,13 @@ public class Settings implements Command {
         return output.toString();
     }
 
-    public static void kickstartStatistics(DSLContext database, Guild guild) {
+    public static void kickstartStatistics(DSLContext database, DiscordGuild guild) {
         MembercountsRecord record = database.newRecord(Tables.MEMBERCOUNTS);
-        List<Member> members = guild.getMembers();
-        long onlineCount = members.stream().filter((member -> DiscordUtils.isOnline(member))).count();
+        long onlineCount = guild.onlineMembers();
         record.setGuildid(guild.getId());
         record.setDate((new Date()).getTime());
-        record.setOnlinecount((int)onlineCount);
-        record.setCount(members.size());
+        record.setOnlinecount((int) onlineCount);
+        record.setCount((int) guild.numberMembers());
         record.store();
     }
 
@@ -163,17 +155,11 @@ public class Settings implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser author, DiscordChannel channel, long ping, String args) {
         Scanner messageIterator = new Scanner(args);
 
-        JDA shard = event.getJDA();
         DSLContext database = bot.getDatabase();
-
-        Member member = event.getMember();
-        Message message = event.getMessage();
-        TextChannel channel = event.getChannel();
-        Guild guild = event.getGuild();
-        SelfUser selfUser = shard.getSelfUser();
+        DiscordUser selfUser = guild.getBotAccount();
 
         if (!messageIterator.hasNext()) {
             return true;
@@ -182,30 +168,30 @@ public class Settings implements Command {
         String subCommand = messageIterator.next();
 
         if (subCommand.equals("list")) {
-            String defaultChannelMention = DiscordUtils.getDefaultChannel(guild).getAsMention();
+            String defaultChannelMention = guild.getDefaultChannel().getMention();
             EmbedBuilder embed = new EmbedBuilder();
-            embed.setAuthor("Safety Jim", null, selfUser.getAvatarUrl());
+            embed.setAuthor("Safety Jim", null, selfUser.getAvatarURL());
             embed.addField("List of settings", String.format(settingsListString, defaultChannelMention, defaultChannelMention), false);
             embed.setColor(new Color(0x4286F4));
-            DiscordUtils.successReact(bot, message);
-            DiscordUtils.sendMessage(channel, embed.build());
+            message.reactSuccess();
+            channel.sendMessage(embed.build());
             return false;
         }
 
         if (subCommand.equals("display")) {
-            handleSettingsDisplay(bot, event);
+            handleSettingsDisplay(bot, channel, message, selfUser, guild);
             return false;
         }
 
-        if (!member.hasPermission(Permission.ADMINISTRATOR)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to modify guild settings! Required permission: Administrator");
+        if (!author.hasPermission(Permission.ADMINISTRATOR)) {
+            message.fail("You don't have enough permissions to modify guild settings! Required permission: Administrator");
             return false;
         }
 
         if (subCommand.equals("reset")) {
             DatabaseUtils.deleteGuildSettings(database, guild);
             DatabaseUtils.createGuildSettings(bot, database, guild);
-            DiscordUtils.successReact(bot, message);
+            message.reactSuccess();
             return false;
         }
 
@@ -226,19 +212,19 @@ public class Settings implements Command {
         }
 
         boolean isKeyOkay = false;
-        for (String possibleKey: settingKeys) {
+        for (String possibleKey : settingKeys) {
             if (possibleKey.equals(key)) {
                 isKeyOkay = true;
             }
         }
 
         if (!isKeyOkay) {
-            DiscordUtils.failMessage(bot, message, "Please enter a valid setting key!");
+            message.fail("Please enter a valid setting key!");
             return false;
         }
 
-        SettingsRecord guildSettings = DatabaseUtils.getGuildSettings(database, guild);
-        TextChannel argumentChannel;
+        SettingsRecord guildSettings = guild.getSettings(bot);
+        DiscordChannel argumentChannel;
 
         try {
             switch (key) {
@@ -261,7 +247,7 @@ public class Settings implements Command {
                         return true;
                     }
 
-                    argumentChannel = message.getMentionedChannels().get(0);
+                    argumentChannel = message.firstMentionedChannel();
                     guildSettings.setWelcomemessagechannelid(argumentChannel.getId());
                     break;
                 case "modlogchannel":
@@ -271,7 +257,7 @@ public class Settings implements Command {
                         return true;
                     }
 
-                    argumentChannel = message.getMentionedChannels().get(0);
+                    argumentChannel = message.firstMentionedChannel();
                     guildSettings.setModlogchannelid(argumentChannel.getId());
                     break;
                 case "holdingroomminutes":
@@ -296,19 +282,19 @@ public class Settings implements Command {
                     String roleId = guildSettings.getHoldingroomroleid();
 
                     if (roleId == null) {
-                        DiscordUtils.failMessage(bot, message, "You can't enable holding room before setting a role for it first.");
+                        message.fail("You can't enable holding room before setting a role for it first.");
                         return false;
                     }
 
                     guildSettings.setHoldingroom(holdingRoomEnabled);
                     break;
                 case "holdingroomrole":
-                    List<Role> foundRoles = guild.getRolesByName(argument, true);
-                    if (foundRoles.size() == 0) {
+                    Optional<DiscordRole> foundRoles = guild.getRolesByName(argument).stream().findFirst();
+                    if (!foundRoles.isPresent()) {
                         return true;
                     }
 
-                    Role role = foundRoles.get(0);
+                    DiscordRole role = foundRoles.get();
                     guildSettings.setHoldingroomroleid(role.getId());
                     break;
                 case "nospaceprefix":
@@ -318,10 +304,10 @@ public class Settings implements Command {
                     guildSettings.setStatistics(isEnabledInput(argument));
                     // Please look away from this mess.
                     bot.getShards()
-                       .stream()
-                       .filter((discordShard -> discordShard.getShard() == shard))
-                       .findAny()
-                       .ifPresent((discordShard) -> discordShard.getThreadPool().submit(() -> discordShard.populateGuildStatistics(guild)));
+                            .stream()
+                            .filter((discordShard -> discordShard.getShard() == guild.getJDA()))
+                            .findAny()
+                            .ifPresent((discordShard) -> discordShard.getThreadPool().submit(() -> discordShard.populateGuildStatistics(guild)));
                     kickstartStatistics(database, guild);
                     break;
                 default:
@@ -332,9 +318,10 @@ public class Settings implements Command {
         }
 
         guildSettings.update();
-        DiscordUtils.successReact(bot, message);
+        message.reactSuccess();
         return false;
     }
 
-    private static class BadInputException extends Exception {}
+    private static class BadInputException extends Exception {
+    }
 }

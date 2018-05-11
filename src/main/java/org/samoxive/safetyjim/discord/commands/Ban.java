@@ -1,11 +1,7 @@
 package org.samoxive.safetyjim.discord.commands;
 
 import net.dv8tion.jda.core.EmbedBuilder;
-import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.Permission;
-import net.dv8tion.jda.core.entities.*;
-import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
-import net.dv8tion.jda.core.managers.GuildController;
 import org.jooq.DSLContext;
 import org.samoxive.jooq.generated.Tables;
 import org.samoxive.jooq.generated.tables.records.BanlistRecord;
@@ -13,6 +9,7 @@ import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.TextUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 import org.samoxive.safetyjim.helpers.Pair;
 
 import java.awt.*;
@@ -33,19 +30,13 @@ public class Ban implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser poster, DiscordChannel channel, long ping, String args) {
         Scanner messageIterator = new Scanner(args);
-        JDA shard = event.getJDA();
 
-        Member member = event.getMember();
-        User user = event.getAuthor();
-        Message message = event.getMessage();
-        TextChannel channel = event.getChannel();
-        Guild guild = event.getGuild();
-        Member selfMember = guild.getSelfMember();
+        DiscordUser botAccount = guild.getBotAccount();
 
-        if (!member.hasPermission(Permission.BAN_MEMBERS)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to execute this command! Required permission: Ban Members");
+        if (!poster.hasPermission(Permission.BAN_MEMBERS)) {
+            message.fail("You don't have enough permissions to execute this command! Required permission: Ban Members");
             return false;
         }
 
@@ -56,37 +47,30 @@ public class Ban implements Command {
             messageIterator.next();
         }
 
-        User banUser = message.getMentionedUsers().get(0);
-        Member banMember = guild.getMember(banUser);
-        GuildController controller = guild.getController();
+        DiscordUser memberToBan = message.firstMentionedMember();
 
-        if (!selfMember.hasPermission(Permission.BAN_MEMBERS)) {
-            DiscordUtils.failMessage(bot, message, "I don't have enough permissions to do that!");
+        if (!botAccount.hasPermission(Permission.BAN_MEMBERS)) {
+            message.fail("I don't have enough permissions to do that!");
             return false;
         }
 
-        if (user.getId().equals(banUser.getId())) {
-            DiscordUtils.failMessage(bot, message, "You can't ban yourself, dummy!");
+        if (poster.getId().equals(memberToBan.getId())) {
+            message.fail("You can't ban yourself, dummy!");
             return false;
         }
 
-        if (!DiscordUtils.isBannable(banMember, selfMember)) {
-            DiscordUtils.failMessage(bot, message, "I don't have enough permissions to do that!");
+        if (!botAccount.canBan(memberToBan)) {
+            message.fail("I don't have enough permissions to do that!");
             return false;
         }
 
-        Pair<String, Date> parsedReasonAndTime;
+        Pair<Boolean, Pair<String, Date>> ret = DiscordUtils.parseReasonAndTime(messageIterator,message);
 
-        try {
-            parsedReasonAndTime = TextUtils.getTextAndTime(messageIterator);
-        } catch (TextUtils.InvalidTimeInputException e) {
-            DiscordUtils.failMessage(bot, message, "Invalid time argument. Please try again.");
-            return false;
-        } catch (TextUtils.TimeInputInPastException e) {
-            DiscordUtils.failMessage(bot, message, "Your time argument was set for the past. Try again.\n" +
-                    "If you're specifying a date, e.g. `30 December`, make sure you also write the year.");
+        if(!ret.getLeft()) {
             return false;
         }
+
+        Pair<String, Date> parsedReasonAndTime = ret.getRight();
 
         String text = parsedReasonAndTime.getLeft();
         String reason = text == null || text.equals("") ? "No reason specified" : text;
@@ -99,15 +83,15 @@ public class Ban implements Command {
                 .setDescription("You were banned from " + guild.getName())
                 .addField("Reason:", TextUtils.truncateForEmbed(reason), false)
                 .addField("Banned until", expirationDate != null ? expirationDate.toString() : "Indefinitely", false)
-                .setFooter("Banned by " + DiscordUtils.getUserTagAndId(user), null)
+                .setFooter("Banned by " + poster.getTagAndId(), null)
                 .setTimestamp(now.toInstant());
 
-        DiscordUtils.sendDM(banUser, embed.build());
+        memberToBan.sendDM(embed.build());
 
         try {
-            String auditLogReason = String.format("Banned by %s - %s", DiscordUtils.getUserTagAndId(user), reason);
-            controller.ban(banMember, 0, auditLogReason).complete();
-            DiscordUtils.successReact(bot, message);
+            String auditLogReason = String.format("Banned by %s - %s", poster.getTagAndId(), reason);
+            guild.ban(memberToBan, 0, auditLogReason);
+            message.reactSuccess();
 
             boolean expires = expirationDate != null;
             DSLContext database = bot.getDatabase();
@@ -121,11 +105,11 @@ public class Ban implements Command {
                     Tables.BANLIST.REASON,
                     Tables.BANLIST.EXPIRES,
                     Tables.BANLIST.UNBANNED)
-                    .values(banUser.getId(),
-                            user.getId(),
+                    .values(memberToBan.getId(),
+                            poster.getId(),
                             guild.getId(),
                             now.getTime() / 1000,
-                            expirationDate != null ? expirationDate.getTime() / 1000 : 0,
+                            expires ? expirationDate.getTime() / 1000 : 0,
                             reason,
                             expires,
                             false)
@@ -133,10 +117,10 @@ public class Ban implements Command {
                     .fetchOne();
 
             int banId = record.getId();
-            DiscordUtils.createModLogEntry(bot, shard, message, banMember, reason, "ban", banId, expirationDate, true);
-            DiscordUtils.sendMessage(channel, "Banned " + DiscordUtils.getUserTagAndId(banUser));
+            DiscordUtils.createModLogEntry(bot, guild, message, memberToBan, poster, reason, "ban", banId, expirationDate, true);
+            channel.sendMessage("Banned " + memberToBan.getTagAndId());
         } catch (Exception e) {
-            DiscordUtils.failMessage(bot, message, "Could not ban the specified user. Do I have enough permissions?");
+            message.fail("Could not ban the specified user. Do I have enough permissions?");
         }
 
         return false;

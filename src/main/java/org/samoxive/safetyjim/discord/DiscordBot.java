@@ -1,8 +1,10 @@
 package org.samoxive.safetyjim.discord;
 
-import com.google.common.base.Functions;
-import com.google.common.collect.Maps;
-import net.dv8tion.jda.core.*;
+import lombok.Getter;
+import net.dv8tion.jda.core.EmbedBuilder;
+import net.dv8tion.jda.core.JDA;
+import net.dv8tion.jda.core.MessageBuilder;
+import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.entities.*;
 import net.dv8tion.jda.core.managers.GuildController;
 import net.dv8tion.jda.core.utils.SessionController;
@@ -13,16 +15,17 @@ import org.jooq.Result;
 import org.json.JSONObject;
 import org.reflections.Reflections;
 import org.samoxive.jooq.generated.Tables;
-import org.samoxive.jooq.generated.tables.Oauthsecrets;
 import org.samoxive.jooq.generated.tables.records.*;
 import org.samoxive.safetyjim.config.Config;
 import org.samoxive.safetyjim.database.DatabaseUtils;
-import org.samoxive.safetyjim.discord.commands.*;
-import org.samoxive.safetyjim.discord.commands.Invite;
+import org.samoxive.safetyjim.discord.commands.Mute;
 import org.samoxive.safetyjim.discord.entities.DiscordSecrets;
-import org.samoxive.safetyjim.discord.entities.PartialGuild;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordGuild;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordRole;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordUser;
 import org.samoxive.safetyjim.discord.processors.InviteLink;
 import org.samoxive.safetyjim.discord.processors.MessageStats;
+import org.samoxive.safetyjim.discord.processors.PrefixRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +36,6 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class DiscordBot {
@@ -46,6 +48,9 @@ public class DiscordBot {
     private ScheduledExecutorService scheduler;
     private OkHttpClient httpClient;
     private Date startTime;
+
+    @Getter
+    private final String inviteLink;
 
     public DiscordBot(DSLContext database, Config config) {
         this.startTime = new Date();
@@ -73,16 +78,64 @@ public class DiscordBot {
             }
         }
 
-        scheduler.scheduleAtFixedRate(() -> { try { allowUsers(); } catch (Exception e) { log.error("Exception occured in allowUsers", e); } }, 10, 5, TimeUnit.SECONDS);
-        scheduler.scheduleAtFixedRate(() -> { try { unmuteUsers(); } catch (Exception e) { log.error("Exception occured in unmuteUsers", e); } }, 10, 10, TimeUnit.SECONDS);
-        scheduler.scheduleAtFixedRate(() -> { try { unbanUsers(); } catch (Exception e) { log.error("Exception occured in unbanUsers", e); } }, 10, 30, TimeUnit.SECONDS);
-        scheduler.scheduleAtFixedRate(() -> { try { remindReminders(); } catch (Exception e) { log.error("Exception occured in remindReminders", e); } }, 10, 5, TimeUnit.SECONDS);
-        scheduler.scheduleAtFixedRate(() -> { try { saveMemberCounts(); } catch (Exception e) { log.error("Exception occured in saveMemberCounts", e); } }, 1, 10, TimeUnit.MINUTES);
-        scheduler.scheduleAtFixedRate(() -> { try { updateBotLists(); } catch (Exception e) { log.error("Exception occured in updateBotLists", e); } }, 10, 1, TimeUnit.MINUTES);
-        scheduler.scheduleAtFixedRate(() -> { try { updateOauthTokens(); } catch (Exception e) { log.error("Exception occured in updateOauthTokens", e); } }, 1, 30, TimeUnit.MINUTES);
-        scheduler.scheduleAtFixedRate(() -> { try { updateGuildsOfOauthUsers(); } catch (Exception e) { log.error("Exception occured in updateGuildsOfOauthUsers", e); } }, 1, 60 * 24, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                allowUsers();
+            } catch (Exception e) {
+                log.error("Exception occured in allowUsers", e);
+            }
+        }, 10, 5, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                unmuteUsers();
+            } catch (Exception e) {
+                log.error("Exception occured in unmuteUsers", e);
+            }
+        }, 10, 10, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                unbanUsers();
+            } catch (Exception e) {
+                log.error("Exception occured in unbanUsers", e);
+            }
+        }, 10, 30, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                remindReminders();
+            } catch (Exception e) {
+                log.error("Exception occured in remindReminders", e);
+            }
+        }, 10, 5, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                saveMemberCounts();
+            } catch (Exception e) {
+                log.error("Exception occured in saveMemberCounts", e);
+            }
+        }, 1, 10, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                updateBotLists();
+            } catch (Exception e) {
+                log.error("Exception occured in updateBotLists", e);
+            }
+        }, 10, 1, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                updateOauthTokens();
+            } catch (Exception e) {
+                log.error("Exception occured in updateOauthTokens", e);
+            }
+        }, 1, 30, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                updateGuildsOfOauthUsers();
+            } catch (Exception e) {
+                log.error("Exception occured in updateGuildsOfOauthUsers", e);
+            }
+        }, 1, 60 * 24, TimeUnit.MINUTES);
 
-        String inviteLink = shards.get(0).getShard().asBot().getInviteUrl(
+        inviteLink = shards.get(0).getShard().asBot().getInviteUrl(
                 Permission.KICK_MEMBERS,
                 Permission.BAN_MEMBERS,
                 Permission.MESSAGE_ADD_REACTION,
@@ -108,31 +161,32 @@ public class DiscordBot {
                     return null;
                 })
                 .filter(Objects::nonNull)
-                .forEach(x -> commands.put(x.command(),x));
+                .forEach(x -> commands.put(x.command(), x));
     }
 
     private void loadProcessors() {
         processors.add(new InviteLink());
         processors.add(new MessageStats());
+        processors.add(new PrefixRequest());
     }
 
     private void saveMemberCounts() {
         Map<String, SettingsRecord> settings = DatabaseUtils.getAllGuildSettings(database);
         List<MembercountsRecord> records = shards.stream()
-              .map((shard) -> shard.getShard().getGuilds())
-              .flatMap(List::stream)
-              .filter(guild -> settings.get(guild.getId()).getStatistics())
-              .map(guild -> {
-                  MembercountsRecord record = database.newRecord(Tables.MEMBERCOUNTS);
-                  List<Member> members = guild.getMembers();
-                  long onlineCount = members.stream().filter(DiscordUtils::isOnline).count();
-                  record.setGuildid(guild.getId());
-                  record.setDate((new Date()).getTime());
-                  record.setOnlinecount((int)onlineCount);
-                  record.setCount(members.size());
-                  return record;
-              })
-              .collect(Collectors.toList());
+                .map((shard) -> shard.getShard().getGuilds())
+                .flatMap(List::stream)
+                .filter(guild -> settings.get(guild.getId()).getStatistics())
+                .map(guild -> {
+                    MembercountsRecord record = database.newRecord(Tables.MEMBERCOUNTS);
+                    List<Member> members = guild.getMembers();
+                    long onlineCount = members.stream().filter(DiscordUtils::isOnline).count();
+                    record.setGuildid(guild.getId());
+                    record.setDate((new Date()).getTime());
+                    record.setOnlinecount((int) onlineCount);
+                    record.setCount(members.size());
+                    return record;
+                })
+                .collect(Collectors.toList());
 
         database.batchStore(records).execute();
     }
@@ -141,11 +195,11 @@ public class DiscordBot {
         long currentTime = System.currentTimeMillis() / 1000;
 
         Result<JoinlistRecord> usersToBeAllowed = database.selectFrom(Tables.JOINLIST)
-                                                        .where(Tables.JOINLIST.ALLOWED.eq(false))
-                                                        .and(Tables.JOINLIST.ALLOWTIME.lt(currentTime))
-                                                        .fetch();
+                .where(Tables.JOINLIST.ALLOWED.eq(false))
+                .and(Tables.JOINLIST.ALLOWTIME.lt(currentTime))
+                .fetch();
 
-        for (JoinlistRecord user: usersToBeAllowed) {
+        for (JoinlistRecord user : usersToBeAllowed) {
             String guildId = user.getGuildid();
             long guildIdLong = Long.parseLong(guildId);
             int shardId = DiscordUtils.getShardIdFromGuildId(guildIdLong, config.jim.shard_count);
@@ -159,7 +213,7 @@ public class DiscordBot {
                 continue;
             }
 
-            SettingsRecord guildSettings = DatabaseUtils.getGuildSettings(database, guild);
+            SettingsRecord guildSettings = new DiscordGuild(guild).getSettings(this);
             boolean enabled = guildSettings.getHoldingroom();
 
             if (enabled) {
@@ -192,13 +246,13 @@ public class DiscordBot {
         long currentTime = System.currentTimeMillis() / 1000;
 
         Result<BanlistRecord> usersToBeUnbanned = database.selectFrom(Tables.BANLIST)
-                                                          .where(
-                                                                  Tables.BANLIST.UNBANNED.eq(false))
-                                                                  .and(Tables.BANLIST.EXPIRES.eq(true))
-                                                                  .and(Tables.BANLIST.EXPIRETIME.lt(currentTime)
-                                                          ).fetch();
+                .where(
+                        Tables.BANLIST.UNBANNED.eq(false))
+                .and(Tables.BANLIST.EXPIRES.eq(true))
+                .and(Tables.BANLIST.EXPIRETIME.lt(currentTime)
+                ).fetch();
 
-        for (BanlistRecord user: usersToBeUnbanned) {
+        for (BanlistRecord user : usersToBeUnbanned) {
             String guildId = user.getGuildid();
             long guildIdLong = Long.parseLong(guildId);
             int shardId = DiscordUtils.getShardIdFromGuildId(guildIdLong, config.jim.shard_count);
@@ -241,12 +295,12 @@ public class DiscordBot {
         Result<MutelistRecord> usersToBeUnmuted = database.selectFrom(Tables.MUTELIST)
                 .where(
                         Tables.MUTELIST.UNMUTED.eq(false))
-                            .and(Tables.MUTELIST.EXPIRES.eq(true))
-                            .and(Tables.MUTELIST.EXPIRETIME.lt(currentTime)
-                      )
+                .and(Tables.MUTELIST.EXPIRES.eq(true))
+                .and(Tables.MUTELIST.EXPIRETIME.lt(currentTime)
+                )
                 .fetch();
 
-        for (MutelistRecord user: usersToBeUnmuted) {
+        for (MutelistRecord user : usersToBeUnmuted) {
             String guildId = user.getGuildid();
             long guildIdLong = Long.parseLong(guildId);
             int shardId = DiscordUtils.getShardIdFromGuildId(guildIdLong, config.jim.shard_count);
@@ -269,15 +323,15 @@ public class DiscordBot {
             }
 
             List<Role> mutedRoles = guild.getRolesByName("Muted", false);
-            Role role;
+            DiscordRole role;
             if (mutedRoles.isEmpty()) {
                 try {
-                    role = Mute.setupMutedRole(guild);
+                    role = Mute.setupMutedRole(new DiscordGuild(guild));
                 } catch (Exception e) {
                     role = null;
                 }
             } else {
-                role = mutedRoles.get(0);
+                role = new DiscordRole(mutedRoles.get(0));
             }
 
             if (role == null) {
@@ -286,10 +340,8 @@ public class DiscordBot {
                 continue;
             }
 
-            GuildController controller = guild.getController();
-
             try {
-                controller.removeSingleRoleFromMember(member, role).complete();
+                new DiscordGuild(guild).removeSingleRole(new DiscordUser(member), role);
             } finally {
                 user.setUnmuted(true);
                 user.update();
@@ -305,7 +357,7 @@ public class DiscordBot {
                 .and(Tables.REMINDERLIST.REMINDTIME.lt(now))
                 .fetch();
 
-        for (ReminderlistRecord reminder: reminders) {
+        for (ReminderlistRecord reminder : reminders) {
             String guildId = reminder.getGuildid();
             long guildIdLong = Long.parseLong(guildId);
             String channelId = reminder.getChannelid();
@@ -365,13 +417,13 @@ public class DiscordBot {
 
         long guildCount = getGuildCount();
         String clientId = shards.get(0).getShard().getSelfUser().getId();
-        for (Config.list list: config.botlist.list) {
+        for (Config.list list : config.botlist.list) {
             JSONObject body = new JSONObject().put("server_count", guildCount);
             Request.Builder builder = new Request.Builder();
             builder.addHeader("Content-Type", "application/json")
-                   .addHeader("Authorization", list.token)
-                   .url(list.url.replace("$id", clientId))
-                   .post(RequestBody.create(MediaType.parse("application/json"), body.toString()));
+                    .addHeader("Authorization", list.token)
+                    .url(list.url.replace("$id", clientId))
+                    .post(RequestBody.create(MediaType.parse("application/json"), body.toString()));
             httpClient.newCall(builder.build()).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
@@ -396,10 +448,10 @@ public class DiscordBot {
 
     public void updateOauthTokens() {
         Result<OauthsecretsRecord> records = database.selectFrom(Tables.OAUTHSECRETS)
-                                                     .where(Tables.OAUTHSECRETS.EXPIRATIONDATE.lt(System.currentTimeMillis() / 1000))
-                                                     .fetch();
+                .where(Tables.OAUTHSECRETS.EXPIRATIONDATE.lt(System.currentTimeMillis() / 1000))
+                .fetch();
 
-        for (OauthsecretsRecord record: records) {
+        for (OauthsecretsRecord record : records) {
             DiscordSecrets secrets = DiscordApiUtils.refreshUserSecrets(config, record.getRefreshtoken());
             if (secrets == null) {
                 record.delete();
@@ -412,26 +464,28 @@ public class DiscordBot {
 
             try {
                 Thread.sleep(1000);
-            } catch (Exception e) {}
+            } catch (Exception e) {
+            }
         }
     }
 
     public void updateGuildsOfOauthUsers() {
         Result<OauthsecretsRecord> records = database.selectFrom(Tables.OAUTHSECRETS)
-                                                     .fetch();
+                .fetch();
 
-        for (OauthsecretsRecord record: records) {
+        for (OauthsecretsRecord record : records) {
             String[] guildIds = DiscordApiUtils.getUserGuilds(record.getAccesstoken())
-                                               .stream()
-                                               .map((guild) -> guild.id)
-                                               .toArray((size) -> new String[size]);
+                    .stream()
+                    .map((guild) -> guild.id)
+                    .toArray((size) -> new String[size]);
 
             record.setGuilds(guildIds);
             record.update();
 
             try {
                 Thread.sleep(2000);
-            } catch (Exception e) {}
+            } catch (Exception e) {
+            }
         }
     }
 
@@ -453,8 +507,8 @@ public class DiscordBot {
 
     public List<Guild> getGuilds() {
         return shards.stream()
-                     .flatMap((shard) -> shard.getShard().getGuilds().stream())
-                     .collect(Collectors.toList());
+                .flatMap((shard) -> shard.getShard().getGuilds().stream())
+                .collect(Collectors.toList());
     }
 
     public DSLContext getDatabase() {

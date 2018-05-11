@@ -12,6 +12,7 @@ import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.TextUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
 import java.awt.*;
 import java.util.Date;
@@ -31,18 +32,11 @@ public class Warn implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser author, DiscordChannel channel, long ping, String args) {
         Scanner messageIterator = new Scanner(args);
-        JDA shard = event.getJDA();
 
-        Member member = event.getMember();
-        User user = event.getAuthor();
-        Message message = event.getMessage();
-        TextChannel channel = event.getChannel();
-        Guild guild = event.getGuild();
-
-        if (!member.hasPermission(Permission.KICK_MEMBERS)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to execute this command!");
+        if (!author.hasPermission(Permission.KICK_MEMBERS)) {
+            message.fail("You don't have enough permissions to execute this command!");
             return false;
         }
 
@@ -53,11 +47,10 @@ public class Warn implements Command {
             messageIterator.next();
         }
 
-        User warnUser = message.getMentionedUsers().get(0);
-        Member warnMember = guild.getMember(warnUser);
+        DiscordUser warnUser = message.firstMentionedMember();
 
-        if (user.getId().equals(warnUser.getId())) {
-            DiscordUtils.failMessage(bot, message, "You can't warn yourself, dummy!");
+        if (author.equals(warnUser)) {
+            message.fail("You can't warn yourself, dummy!");
             return false;
         }
 
@@ -71,16 +64,16 @@ public class Warn implements Command {
         embed.setColor(new Color(0x4286F4));
         embed.setDescription("You were warned in " + guild.getName());
         embed.addField("Reason:", TextUtils.truncateForEmbed(reason), false);
-        embed.setFooter("Warned by " + DiscordUtils.getUserTagAndId(user), null);
+        embed.setFooter("Warned by " + warnUser.getTagAndId(), null);
         embed.setTimestamp(now.toInstant());
 
         try {
-            DiscordUtils.sendDM(warnUser, embed.build());
+            warnUser.sendDM(embed.build());
         } catch (Exception e) {
-            DiscordUtils.sendMessage(channel, "Could not send a warning to the specified user via private message!");
+            channel.sendMessage("Could not send a warning to the specified user via private message!");
         }
 
-        DiscordUtils.successReact(bot, message);
+        message.reactSuccess();
 
         DSLContext database = bot.getDatabase();
 
@@ -91,15 +84,15 @@ public class Warn implements Command {
                 Tables.WARNLIST.WARNTIME,
                 Tables.WARNLIST.REASON)
                 .values(warnUser.getId(),
-                        user.getId(),
+                        author.getId(),
                         guild.getId(),
                         now.getTime() / 1000,
                         reason)
                 .returning(Tables.WARNLIST.ID)
                 .fetchOne();
 
-        DiscordUtils.createModLogEntry(bot, shard, message, warnMember, reason, "warn", record.getId(), null, false);
-        DiscordUtils.sendMessage(channel, "Warned " + DiscordUtils.getUserTagAndId(warnUser));
+        DiscordUtils.createModLogEntry(bot, guild, message, warnUser, author, reason, "warn", record.getId(), null, false);
+        channel.sendMessage("Warned " + warnUser.getTagAndId());
 
         return false;
     }

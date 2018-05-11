@@ -13,6 +13,7 @@ import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordShard;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.commands.Settings;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordGuild;
 import org.samoxive.safetyjim.server.EndpointHandler;
 import org.samoxive.safetyjim.server.Server;
 import org.samoxive.safetyjim.server.ServerUtils;
@@ -106,8 +107,8 @@ public class PostGuildSettings extends EndpointHandler {
 
         if (newSettings.statistics) {
             DiscordShard shard = bot.getShards().get(DiscordUtils.getShardIdFromGuildId(guild.getIdLong(), config.jim.shard_count));
-            shard.getThreadPool().submit(() -> shard.populateGuildStatistics(guild));
-            Settings.kickstartStatistics(database, guild);
+            shard.getThreadPool().submit(() -> shard.populateGuildStatistics(new DiscordGuild(guild)));
+            Settings.kickstartStatistics(database, new DiscordGuild(guild));
         }
 
         response.setStatusCode(200);

@@ -6,6 +6,7 @@ import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
 import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
 import java.awt.*;
 
@@ -23,14 +24,13 @@ public class Ping implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
-        JDA shard = event.getJDA();
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser poster, DiscordChannel channel, long ping, String args) {
         EmbedBuilder embed = new EmbedBuilder();
-        embed.setAuthor("Safety Jim " + DiscordUtils.getShardString(shard.getShardInfo()), null, shard.getSelfUser().getAvatarUrl());
-        embed.setDescription(":ping_pong: Ping: " + shard.getPing() + "ms");
+        embed.setAuthor("Safety Jim ", null, guild.getBotAccount().getAvatarURL());
+        embed.setDescription(":ping_pong: Ping: " + ping + "ms");
         embed.setColor(new Color(0x4286F4));
-        DiscordUtils.successReact(bot, event.getMessage());
-        DiscordUtils.sendMessage(event.getChannel(), embed.build());
+        message.reactSuccess();
+        channel.sendMessage(embed.build());
         return false;
     }
 }

@@ -1,40 +1,35 @@
 package org.samoxive.safetyjim.discord;
 
 import net.dv8tion.jda.core.*;
-import net.dv8tion.jda.core.entities.*;
-import net.dv8tion.jda.core.events.*;
-import net.dv8tion.jda.core.events.guild.GuildJoinEvent;
-import net.dv8tion.jda.core.events.guild.GuildLeaveEvent;
-import net.dv8tion.jda.core.events.guild.member.GuildMemberJoinEvent;
-import net.dv8tion.jda.core.events.guild.member.GuildMemberLeaveEvent;
+import net.dv8tion.jda.core.entities.Emote;
+import net.dv8tion.jda.core.entities.Game;
+import net.dv8tion.jda.core.entities.TextChannel;
+import net.dv8tion.jda.core.events.ExceptionEvent;
 import net.dv8tion.jda.core.events.message.guild.GuildMessageDeleteEvent;
-import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
-import net.dv8tion.jda.core.events.message.guild.react.GuildMessageReactionAddEvent;
-import net.dv8tion.jda.core.events.message.guild.react.GuildMessageReactionRemoveEvent;
-import net.dv8tion.jda.core.hooks.ListenerAdapter;
-import net.dv8tion.jda.core.managers.GuildController;
 import net.dv8tion.jda.core.utils.SessionController;
 import org.jooq.DSLContext;
 import org.jooq.Result;
 import org.samoxive.jooq.generated.Tables;
 import org.samoxive.jooq.generated.tables.records.*;
 import org.samoxive.safetyjim.config.Config;
-import org.samoxive.safetyjim.database.DatabaseUtils;
 import org.samoxive.safetyjim.discord.commands.Mute;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.security.auth.login.LoginException;
 import java.awt.*;
 import java.sql.Timestamp;
-import java.util.*;
+import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.StringJoiner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
-public class DiscordShard extends ListenerAdapter {
+public class DiscordShard extends DiscordListenerAdapter {
     private Logger log;
     private DiscordBot bot;
     private JDA shard;
@@ -52,13 +47,13 @@ public class DiscordShard extends ListenerAdapter {
         JDABuilder builder = new JDABuilder(AccountType.BOT);
         try {
             this.shard = builder.setToken(bot.getConfig().jim.token)
-                                .setAudioEnabled(false) // jim doesn't have any audio functionality
-                                .addEventListener(this)
-                                .setSessionController(sessionController) // needed to prevent shards trying to reconnect too soon
-                                .setEnableShutdownHook(true)
-                                .useSharding(shardId, bot.getConfig().jim.shard_count)
-                                .setGame(Game.playing(String.format("-mod help | %s | %s", version, DiscordUtils.getShardString(shardId, shardCount))))
-                                .buildBlocking();
+                    .setAudioEnabled(false) // jim doesn't have any audio functionality
+                    .addEventListener(this)
+                    .setSessionController(sessionController) // needed to prevent shards trying to reconnect too soon
+                    .setEnableShutdownHook(true)
+                    .useSharding(shardId, bot.getConfig().jim.shard_count)
+                    .setGame(Game.playing(String.format("-mod help | %s | %s", version, DiscordUtils.getShardString(shardId, shardCount))))
+                    .buildBlocking();
         } catch (LoginException e) {
             log.error("Invalid token.");
             System.exit(1);
@@ -71,23 +66,29 @@ public class DiscordShard extends ListenerAdapter {
     private void populateStatistics(JDA shard) {
         DSLContext database = bot.getDatabase();
         shard.getGuilds()
-             .stream()
-             .filter((guild) -> DatabaseUtils.getGuildSettings(database, guild).getStatistics())
-             .forEach(this::populateGuildStatistics);
+                .stream()
+                .map(DiscordGuild::new)
+                .filter(g -> g.getSettings(bot).getStatistics())
+                .forEach(this::populateGuildStatistics);
     }
 
-    public void populateGuildStatistics(Guild guild) {
-        Member self = guild.getMember(guild.getJDA().getSelfUser());
-        guild.getTextChannels()
-             .stream()
-             .filter((channel) -> self.hasPermission(channel, Permission.MESSAGE_HISTORY, Permission.MESSAGE_READ))
-             .map((channel) -> threadPool.submit(() -> populateChannelStatistics(channel)))
-             .forEach((future) -> { try { future.get(); } catch (Exception e) {}});
+    public void populateGuildStatistics(DiscordGuild guild) {
+        DiscordUser self = guild.getBotAccount();
+        guild.getChannels()
+                .stream()
+                .filter((channel) -> self.hasPermission(channel, Permission.MESSAGE_HISTORY, Permission.MESSAGE_READ))
+                .map((channel) -> threadPool.submit(() -> populateChannelStatistics(channel)))
+                .forEach((future) -> {
+                    try {
+                        future.get();
+                    } catch (Exception e) {
+                    }
+                });
     }
 
-    private void populateChannelStatistics(TextChannel channel) {
+    private void populateChannelStatistics(DiscordChannel channel) {
         DSLContext database = bot.getDatabase();
-        Guild guild = channel.getGuild();
+        DiscordGuild guild = channel.getGuild();
         MessagesRecord oldestRecord = database.selectFrom(Tables.MESSAGES)
                 .where(Tables.MESSAGES.GUILDID.eq(guild.getId()))
                 .and(Tables.MESSAGES.CHANNELID.eq(channel.getId()))
@@ -102,27 +103,27 @@ public class DiscordShard extends ListenerAdapter {
                 .limit(1)
                 .fetchAny();
 
-        List<Message> fetchedMessages = null;
+        List<DiscordMessage> fetchedMessages = null;
         if (oldestRecord == null || newestRecord == null) {
-            fetchedMessages = DiscordUtils.fetchHistoryFromScratch(channel);
+            fetchedMessages = channel.allHistory();
         } else {
-            Message oldestMessageStored = null, newestMessageStored = null;
+            DiscordMessage oldestMessageStored = null, newestMessageStored = null;
 
             try {
-                oldestMessageStored = channel.getMessageById(oldestRecord.getMessageid()).complete();
-                newestMessageStored = channel.getMessageById(newestRecord.getMessageid()).complete();
+                oldestMessageStored = channel.getMessageById(oldestRecord.getMessageid());
+                newestMessageStored = channel.getMessageById(newestRecord.getMessageid());
                 if (oldestMessageStored == null || newestMessageStored == null) {
                     throw new Exception();
                 }
 
-                fetchedMessages = DiscordUtils.fetchFullHistoryBeforeMessage(channel, oldestMessageStored);
-                fetchedMessages.addAll(DiscordUtils.fetchFullHistoryAfterMessage(channel, newestMessageStored));
+                fetchedMessages = channel.fetchFullHistoryBeforeMessage(oldestMessageStored);
+                fetchedMessages.addAll(channel.fetchFullHistoryAfterMessage(newestMessageStored));
             } catch (Exception e) {
                 database.deleteFrom(Tables.MESSAGES)
                         .where(Tables.MESSAGES.CHANNELID.eq(channel.getId()))
                         .and(Tables.MESSAGES.GUILDID.eq(guild.getId()))
                         .execute();
-                fetchedMessages = DiscordUtils.fetchHistoryFromScratch(channel);
+                fetchedMessages = channel.allHistory();
             }
         }
 
@@ -133,8 +134,8 @@ public class DiscordShard extends ListenerAdapter {
         List<MessagesRecord> records = fetchedMessages.stream()
                 .map(message -> {
                     MessagesRecord record = database.newRecord(Tables.MESSAGES);
-                    User user = message.getAuthor();
-                    String content = message.getContentRaw();
+                    DiscordUser user = message.getAuthor();
+                    String content = message.getText();
                     int wordCount = content.split(" ").length;
                     record.setMessageid(message.getId());
                     record.setUserid(user.getId());
@@ -151,28 +152,26 @@ public class DiscordShard extends ListenerAdapter {
     }
 
     @Override
-    public void onReady(ReadyEvent event) {
+    public void onReady(List<DiscordGuild> guilds, JDA shard) {
         log.info("Shard is ready.");
-        DSLContext database = this.bot.getDatabase();
-        JDA shard = event.getJDA();
 
-        for (Guild guild: shard.getGuilds()) {
-            if (DiscordUtils.isBotFarm(guild)) {
-                guild.leave().complete();
+        for (DiscordGuild guild : guilds) {
+            if (guild.isBotFarm()) {
+                guild.leave();
             } else {
-                if (!DiscordUtils.isGuildTalkable(guild)) {
-                    guild.leave().complete();
+                if (!guild.isTalkable()) {
+                    guild.leave();
                 }
             }
         }
 
         int guildsWithMissingKeys = 0;
-        for (Guild guild: shard.getGuilds()) {
-            SettingsRecord guildSettings = DatabaseUtils.getGuildSettings(database, guild);
+        for (DiscordGuild guild : guilds) {
+            SettingsRecord guildSettings = guild.getSettings(bot);
 
             if (guildSettings == null) {
-                DatabaseUtils.deleteGuildSettings(database, guild);
-                DatabaseUtils.createGuildSettings(this.bot, database, guild);
+                guild.removeSettings(bot.getDatabase());
+                guild.createSettings(bot);
                 guildsWithMissingKeys++;
             }
         }
@@ -192,42 +191,22 @@ public class DiscordShard extends ListenerAdapter {
     }
 
     @Override
-    public void onGuildMessageReceived(GuildMessageReceivedEvent event) {
-        if (event.getAuthor().isBot()) {
+    public void onGuildMessageReceived(DiscordGuild guild, DiscordUser poster, DiscordMessage message, DiscordChannel channel, long ping) {
+        if (poster.isBot()) {
             return;
         }
 
-        DSLContext database = bot.getDatabase();
-        Guild guild = event.getGuild();
-        Message message = event.getMessage();
-        String content = message.getContentRaw();
-        JDA shard = event.getJDA();
-        SelfUser self = shard.getSelfUser();
-
-        if (message.isMentioned(self) && content.contains("prefix")) {
-            SettingsRecord guildSettings = DatabaseUtils.getGuildSettings(database, guild);
-            String prefix = guildSettings.getPrefix();
-            DiscordUtils.successReact(bot, message);
-
-            EmbedBuilder embed = new EmbedBuilder();
-            embed.setAuthor("Safety Jim - Prefix", null, self.getAvatarUrl())
-                 .setDescription("This guild's prefix is: " + prefix)
-                 .setColor(new Color(0x4286F4));
-
-            DiscordUtils.sendMessage(message.getTextChannel(), embed.build());
-            return;
-        }
-
+        String content = message.getText();
         List<Future<Boolean>> processorResults = new LinkedList<>();
 
         // Spread processing jobs across threads as they are likely to be independent of io operations
-        for (MessageProcessor processor: bot.getProcessors()) {
-            Future<Boolean> future = threadPool.submit(() -> processor.onMessage(bot, this, event));
+        for (MessageProcessor processor : bot.getProcessors()) {
+            Future<Boolean> future = threadPool.submit(() -> processor.onMessage(bot, this, guild, message, poster, channel));
             processorResults.add(future);
         }
 
         // If processors return true, that means they deleted the original message so we don't need to continue further
-        for (Future<Boolean> result: processorResults) {
+        for (Future<Boolean> result : processorResults) {
             try {
                 if (result.get().equals(true)) {
                     return;
@@ -237,10 +216,12 @@ public class DiscordShard extends ListenerAdapter {
             }
         }
 
-        SettingsRecord guildSettings = DatabaseUtils.getGuildSettings(database, guild);
+        SettingsRecord guildSettings = guild.getSettings(bot);
+
         if (guildSettings == null) { // settings aren't initialized yet
             return;
         }
+
         String prefix = guildSettings.getPrefix().toLowerCase();
 
         // 0 = prefix, 1 = command, rest are accepted as arguments
@@ -256,7 +237,7 @@ public class DiscordShard extends ListenerAdapter {
 
             // This means the user only entered the prefix
             if (splitContent.length == 1) {
-                DiscordUtils.failReact(bot, message);
+                message.reactFail();
                 return;
             }
 
@@ -269,7 +250,7 @@ public class DiscordShard extends ListenerAdapter {
             }
 
             if (firstWord.length() == prefix.length()) {
-                DiscordUtils.failReact(bot, message);
+                message.reactFail();
                 return;
             }
 
@@ -279,7 +260,7 @@ public class DiscordShard extends ListenerAdapter {
 
         // Command not found
         if (command == null) {
-            DiscordUtils.failReact(bot, message);
+            message.reactFail();
             return;
         }
 
@@ -293,7 +274,7 @@ public class DiscordShard extends ListenerAdapter {
 
         // Command executions are likely to be io dependant, better send them in a seperate thread to not block
         // discord client
-        threadPool.execute(() -> executeCommand(event, command, commandName, args.toString().trim()));
+        threadPool.execute(() -> executeCommand(command, commandName, guild, message, poster, channel, ping, args.toString().trim()));
     }
 
     @Override
@@ -302,75 +283,67 @@ public class DiscordShard extends ListenerAdapter {
     }
 
     @Override
-    public void onGuildMessageDelete(GuildMessageDeleteEvent event) {
+    public void onGuildMessageDeleted(DiscordGuild guild, DiscordChannel channel) {
         // TODO(sam): Add message cache and trigger message processors if
         // deleted message is in the cache
     }
 
     @Override
-    public void onGuildMessageReactionAdd(GuildMessageReactionAddEvent event) {
-        if (event.getMember().getUser().isBot() || event.getChannelType() != ChannelType.TEXT) {
+    public void onGuildMessageReactionAdd(DiscordMessage messageReacted, DiscordUser reactor, Emote emoticon) {
+        if (reactor.isBot()) {
             return;
         }
 
-        for (MessageProcessor processor: bot.getProcessors()) {
-            threadPool.execute(() -> processor.onReactionAdd(bot, this, event));
+        for (MessageProcessor processor : bot.getProcessors()) {
+            threadPool.execute(() -> processor.onReactionAdd(bot, this, messageReacted, reactor, emoticon));
         }
     }
 
     @Override
-    public void onGuildMessageReactionRemove(GuildMessageReactionRemoveEvent event) {
-        if (event.getMember().getUser().isBot() || event.getChannelType() != ChannelType.TEXT) {
+    public void onGuildMessageReactionRemove(DiscordMessage messageReacted, DiscordUser unReactor, Emote emoticon) {
+        if (unReactor.isBot()) {
             return;
         }
 
-        for (MessageProcessor processor: bot.getProcessors()) {
-            threadPool.execute(() -> processor.onReactionRemove(bot, this, event));
+        for (MessageProcessor processor : bot.getProcessors()) {
+            threadPool.execute(() -> processor.onReactionRemove(bot, this, messageReacted, unReactor, emoticon));
         }
     }
 
     @Override
-    public void onGuildJoin(GuildJoinEvent event) {
-        Guild guild = event.getGuild();
-        if (DiscordUtils.isBotFarm(guild)) {
-            guild.leave().complete();
+    public void onGuildJoin(DiscordGuild guild) {
+        if (guild.isBotFarm()) {
+            guild.leave();
             return;
-        } else {
-            if (!DiscordUtils.isGuildTalkable(guild)) {
-                guild.leave().complete();
-                return;
-            }
+        }
+        if (!guild.isTalkable()) {
+            guild.leave();
+            return;
         }
 
-        DSLContext database = bot.getDatabase();
         String defaultPrefix = bot.getConfig().jim.default_prefix;
         String message = String.format("Hello! I am Safety Jim, `%s` is my default prefix! Try typing `%s help` to see available commands.", defaultPrefix, defaultPrefix);
-        DiscordUtils.sendMessage(DiscordUtils.getDefaultChannel(guild), message);
-        DatabaseUtils.createGuildSettings(bot, database, guild);
+        guild.getDefaultChannel().sendMessage(message);
+        guild.createSettings(bot);
     }
 
     @Override
-    public void onGuildLeave(GuildLeaveEvent event) {
-        DatabaseUtils.deleteGuildSettings(bot.getDatabase(), event.getGuild());
+    public void onGuildLeave(DiscordGuild guild) {
+        guild.removeSettings(bot.getDatabase());
     }
 
     @Override
-    public void onGuildMemberJoin(GuildMemberJoinEvent event) {
-        JDA shard = event.getJDA();
-        Guild guild = event.getGuild();
-        GuildController controller = guild.getController();
-        Member member = event.getMember();
-        User user = member.getUser();
+    public void onGuildMemberJoin(DiscordGuild guild, DiscordUser newMember) {
         DSLContext database = bot.getDatabase();
-        SettingsRecord guildSettings = DatabaseUtils.getGuildSettings(database, guild);
+        SettingsRecord guildSettings = guild.getSettings(bot);
 
         if (guildSettings.getWelcomemessage()) {
             String textChannelId = guildSettings.getWelcomemessagechannelid();
             TextChannel channel = shard.getTextChannelById(textChannelId);
             if (channel != null) {
                 String message = guildSettings.getMessage()
-                                         .replace("$user", member.getAsMention())
-                                         .replace("$guild", guild.getName());
+                        .replace("$user", newMember.getMention())
+                        .replace("$guild", guild.getName());
                 if (guildSettings.getHoldingroom()) {
                     String waitTime = guildSettings.getHoldingroomminutes().toString();
                     message = message.replace("$minute", waitTime);
@@ -385,7 +358,7 @@ public class DiscordShard extends ListenerAdapter {
             long currentTime = System.currentTimeMillis() / 1000;
 
             JoinlistRecord newRecord = database.newRecord(Tables.JOINLIST);
-            newRecord.setUserid(member.getUser().getId());
+            newRecord.setUserid(newMember.getId());
             newRecord.setGuildid(guild.getId());
             newRecord.setJointime(currentTime);
             newRecord.setAllowtime(currentTime + waitTime * 60);
@@ -395,16 +368,16 @@ public class DiscordShard extends ListenerAdapter {
 
 
         Result<MutelistRecord> records = database.selectFrom(Tables.MUTELIST)
-                                               .where(Tables.MUTELIST.GUILDID.eq(guild.getId()))
-                                               .and(Tables.MUTELIST.USERID.eq(user.getId()))
-                                               .and(Tables.MUTELIST.UNMUTED.eq(false))
-                                               .fetch();
+                .where(Tables.MUTELIST.GUILDID.eq(guild.getId()))
+                .and(Tables.MUTELIST.USERID.eq(newMember.getId()))
+                .and(Tables.MUTELIST.UNMUTED.eq(false))
+                .fetch();
 
         if (records.isEmpty()) {
             return;
         }
 
-        Role mutedRole = null;
+        DiscordRole mutedRole = null;
         try {
             mutedRole = Mute.setupMutedRole(guild);
         } catch (Exception e) {
@@ -412,75 +385,73 @@ public class DiscordShard extends ListenerAdapter {
         }
 
         try {
-            controller.addSingleRoleToMember(member, mutedRole).complete();
+            guild.addRoleToUser(newMember, mutedRole);
         } catch (Exception e) {
             // Maybe actually do something if this fails?
         }
     }
 
     @Override
-    public void onGuildMemberLeave(GuildMemberLeaveEvent event) {
+    public void onGuildMemberLeave(DiscordGuild guild, DiscordUser leaver) {
         bot.getDatabase()
-           .deleteFrom(Tables.JOINLIST)
-           .where(Tables.JOINLIST.USERID.eq(event.getUser().getId()))
-           .execute();
+                .deleteFrom(Tables.JOINLIST)
+                .where(Tables.JOINLIST.USERID.eq(leaver.getId())
+                        .and(Tables.JOINLIST.GUILDID.eq(guild.getId()))
+                ).execute();
     }
 
     public JDA getShard() {
         return shard;
     }
 
-    private void createCommandLog(GuildMessageReceivedEvent event, String commandName, String args, Date time, long from, long to) {
-        User author = event.getAuthor();
+    private void createCommandLog(DiscordUser author, DiscordGuild guild, String commandName, String args, Date time, long from, long to) {
         CommandlogsRecord record = bot.getDatabase().newRecord(Tables.COMMANDLOGS);
         record.setCommand(commandName);
         record.setArguments(args);
         record.setTime(new Timestamp(time.getTime()));
-        record.setUsername(DiscordUtils.getTag(author));
+        record.setUsername(author.getTag());
         record.setUserid(author.getId());
-        record.setGuildname(event.getGuild().getName());
-        record.setGuildid(event.getGuild().getId());
+        record.setGuildname(guild.getName());
+        record.setGuildid(guild.getId());
         record.setExecutiontime((int) (to - from));
         record.store();
     }
 
-    private void executeCommand(GuildMessageReceivedEvent event, Command command, String commandName, String args) {
-        JDA shard = event.getJDA();
-
+    private void executeCommand(Command command, String commandName, DiscordGuild guild, DiscordMessage message, DiscordUser poster, DiscordChannel channel, long ping, String args) {
         Date date = new Date();
         long startTime = System.currentTimeMillis();
         boolean showUsage = false;
+
         try {
-            showUsage = command.run(bot, event, args);
+            showUsage = command.run(bot, guild, message, poster, channel, ping, args);
         } catch (Exception e) {
-            DiscordUtils.failReact(bot, event.getMessage());
-            DiscordUtils.sendMessage(event.getChannel(), "There was an error running your command, this incident has been logged.");
-            log.error(String.format("%s failed with arguments %s in guild %s - %s", commandName, args, event.getGuild().getName(), event.getGuild().getId()), e);
+            message.fail("There was an error running your command, this incident has been logged.");
+            log.error(String.format("%s failed with arguments %s in guild %s - %s", commandName, args, guild.getName(), guild.getId()), e);
         } finally {
             long endTime = System.currentTimeMillis();
-            threadPool.submit(() -> createCommandLog(event, commandName, args, date, startTime, endTime));
+            threadPool.submit(() -> createCommandLog(poster, guild, commandName, args, date, startTime, endTime));
         }
 
         if (showUsage) {
             String[] usages = command.getUsages();
-            SettingsRecord guildSettings = DatabaseUtils.getGuildSettings(bot.getDatabase(), event.getGuild());
+            SettingsRecord guildSettings = guild.getSettings(bot);
             String prefix = guildSettings.getPrefix();
 
             EmbedBuilder embed = new EmbedBuilder();
             embed.setAuthor("Safety Jim - \"" + commandName + "\" Syntax", null, shard.getSelfUser().getAvatarUrl())
-                 .setDescription(DiscordUtils.getUsageString(prefix, usages))
-                 .setColor(new Color(0x4286F4));
+                    .setDescription(DiscordUtils.getUsageString(prefix, usages))
+                    .setColor(new Color(0x4286F4));
 
-            DiscordUtils.failReact(bot, event.getMessage());
-            event.getChannel().sendMessage(embed.build()).queue();
+            message.reactFail();
+            channel.sendMessage(embed.build());
         } else {
             String[] deleteCommands = {
                     "ban", "kick", "mute", "softban", "warn"
             };
 
-            for (String deleteCommand: deleteCommands) {
+            for (String deleteCommand : deleteCommands) {
                 if (commandName.equals(deleteCommand)) {
-                    DiscordUtils.deleteCommandMessage(bot, event.getMessage());
+                    DiscordUtils.deleteCommandMessage(bot, guild, message);
                     return;
                 }
             }

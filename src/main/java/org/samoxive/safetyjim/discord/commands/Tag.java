@@ -16,6 +16,7 @@ import org.samoxive.safetyjim.discord.Command;
 import org.samoxive.safetyjim.discord.DiscordBot;
 import org.samoxive.safetyjim.discord.DiscordUtils;
 import org.samoxive.safetyjim.discord.TextUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.*;
 
 import java.awt.*;
 import java.util.Scanner;
@@ -39,20 +40,16 @@ public class Tag implements Command {
         return false;
     }
 
-    private void displayTags(DiscordBot bot, GuildMessageReceivedEvent event) {
+    private void displayTags(DiscordBot bot, DiscordChannel channel, DiscordGuild guild, DiscordMessage message) {
         DSLContext database = bot.getDatabase();
-        JDA shard = event.getJDA();
-        Guild guild = event.getGuild();
-        TextChannel channel = event.getChannel();
-        Message message = event.getMessage();
 
         Result<TaglistRecord> records = database.selectFrom(Tables.TAGLIST)
                                                 .where(Tables.TAGLIST.GUILDID.eq(guild.getId()))
                                                 .fetch();
 
         if (records.isEmpty()) {
-            DiscordUtils.successReact(bot, message);
-            DiscordUtils.sendMessage(channel, "No tags have been added yet!");
+            message.reactSuccess();
+            channel.sendMessage("No tags have been added yet!");
             return;
         }
 
@@ -63,41 +60,38 @@ public class Tag implements Command {
         }
 
         EmbedBuilder embed = new EmbedBuilder();
-        embed.setAuthor("Safety Jim", null, shard.getSelfUser().getAvatarUrl());
+        embed.setAuthor("Safety Jim", null, guild.getBotAccount().getAvatarURL());
         embed.addField("List of tags", TextUtils.truncateForEmbed(tagString.toString()), false);
         embed.setColor(new Color(0x4286F4));
 
-        DiscordUtils.successReact(bot, message);
-        DiscordUtils.sendMessage(channel, embed.build());
+        message.reactSuccess();
+        channel.sendMessage(embed.build());
     }
 
-    private void addTag(DiscordBot bot, GuildMessageReceivedEvent event, Scanner messageIterator) {
+    private void addTag(DiscordBot bot, DiscordUser author, DiscordGuild guild, DiscordMessage message, Scanner messageIterator) {
         DSLContext database = bot.getDatabase();
-        Guild guild = event.getGuild();
-        Message message = event.getMessage();
-        Member member = event.getMember();
 
-        if (!member.hasPermission(Permission.ADMINISTRATOR)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to use this command!");
+        if (!author.hasPermission(Permission.ADMINISTRATOR)) {
+            message.fail("You don't have enough permissions to use this command!");
             return;
         }
 
         if (!messageIterator.hasNext()) {
-            DiscordUtils.failMessage(bot, message, "Please provide a tag name and a response to create a new tag!");
+            message.fail("Please provide a tag name and a response to create a new tag!");
             return;
         }
 
         String tagName = messageIterator.next();
 
         if (isSubcommand(tagName)) {
-            DiscordUtils.failMessage(bot, message, "You can't create a tag with the same name as a subcommand!");
+            message.fail("You can't create a tag with the same name as a subcommand!");
             return;
         }
 
         String response = TextUtils.seekScannerToEnd(messageIterator);
 
         if (response.equals("")) {
-            DiscordUtils.failMessage(bot, message, "Empty responses aren't allowed!");
+            message.fail("Empty responses aren't allowed!");
             return;
         }
 
@@ -109,25 +103,22 @@ public class Tag implements Command {
 
         try {
             record.store();
-            DiscordUtils.successReact(bot, message);
+            message.reactFail();;
         } catch (Exception e) {
-            DiscordUtils.failMessage(bot, message, "Tag `" + tagName + "` already exists!");
+            message.fail("Tag `" + tagName + "` already exists!");
         }
     }
 
-    private void editTag(DiscordBot bot, GuildMessageReceivedEvent event, Scanner messageIterator) {
+    private void editTag(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser author, Scanner messageIterator) {
         DSLContext database = bot.getDatabase();
-        Guild guild = event.getGuild();
-        Message message = event.getMessage();
-        Member member = event.getMember();
 
-        if (!member.hasPermission(Permission.ADMINISTRATOR)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to use this command!");
+        if (!author.hasPermission(Permission.ADMINISTRATOR)) {
+            message.fail("You don't have enough permissions to use this command!");
             return;
         }
 
         if (!messageIterator.hasNext()) {
-            DiscordUtils.failMessage(bot, message, "Please provide a tag name and a response to edit tags!");
+            message.fail("Please provide a tag name and a response to edit tags!");
             return;
         }
 
@@ -135,7 +126,7 @@ public class Tag implements Command {
         String response = TextUtils.seekScannerToEnd(messageIterator);
 
         if (response.equals("")) {
-            DiscordUtils.failMessage(bot, message, "Empty responses aren't allowed!");
+            message.fail("Empty responses aren't allowed!");
             return;
         }
 
@@ -145,29 +136,26 @@ public class Tag implements Command {
                                        .fetchOne();
 
         if (record == null) {
-            DiscordUtils.failMessage(bot, message, "Tag `" + tagName + "` does not exist!");
+            message.fail("Tag `" + tagName + "` does not exist!");
             return;
         }
 
         record.setResponse(response);
         record.update();
 
-        DiscordUtils.successReact(bot, message);
+        message.reactSuccess();
     }
 
-    private void deleteTag(DiscordBot bot, GuildMessageReceivedEvent event, Scanner messageIterator) {
+    private void deleteTag(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser author, Scanner messageIterator) {
         DSLContext database = bot.getDatabase();
-        Guild guild = event.getGuild();
-        Message message = event.getMessage();
-        Member member = event.getMember();
 
-        if (!member.hasPermission(Permission.ADMINISTRATOR)) {
-            DiscordUtils.failMessage(bot, message, "You don't have enough permissions to use this command!");
+        if (!author.hasPermission(Permission.ADMINISTRATOR)) {
+            message.fail("You don't have enough permissions to use this command!");
             return;
         }
 
         if (!messageIterator.hasNext()) {
-            DiscordUtils.failMessage(bot, message, "Please provide a tag name and a response to delete tags!");
+            message.fail("Please provide a tag name and a response to delete tags!");
             return;
         }
 
@@ -179,12 +167,12 @@ public class Tag implements Command {
                                        .fetchOne();
 
         if (record == null) {
-            DiscordUtils.failMessage(bot, message, "Tag `" + tagName + "` does not exist!");
+            message.fail("Tag `" + tagName + "` does not exist!");
             return;
         }
 
         record.delete();
-        DiscordUtils.successReact(bot, message);
+        message.reactSuccess();
     }
 
     @Override
@@ -198,12 +186,9 @@ public class Tag implements Command {
     }
 
     @Override
-    public boolean run(DiscordBot bot, GuildMessageReceivedEvent event, String args) {
+    public boolean run(DiscordBot bot, DiscordGuild guild, DiscordMessage message, DiscordUser poster, DiscordChannel channel, long ping, String args) {
         Scanner messageIterator = new Scanner(args);
         DSLContext database = bot.getDatabase();
-        Guild guild = event.getGuild();
-        Message message = event.getMessage();
-        TextChannel channel = event.getChannel();
 
         if (!messageIterator.hasNext()) {
             return true;
@@ -213,16 +198,16 @@ public class Tag implements Command {
 
         switch (commandOrTag) {
             case "list":
-                displayTags(bot, event);
+                displayTags(bot, channel, guild, message);
                 break;
             case "add":
-                addTag(bot, event, messageIterator);
+                addTag(bot, poster, guild, message, messageIterator);
                 break;
             case "edit":
-                editTag(bot, event, messageIterator);
+                editTag(bot, guild, message, poster, messageIterator);
                 break;
             case "remove":
-                deleteTag(bot, event, messageIterator);
+                deleteTag(bot, guild, message, poster, messageIterator);
                 break;
             default:
                 TaglistRecord record = database.selectFrom(Tables.TAGLIST)
@@ -231,12 +216,12 @@ public class Tag implements Command {
                                                .fetchAny();
 
                 if (record == null) {
-                    DiscordUtils.failMessage(bot, message, "Could not find a tag with that name!");
+                    message.fail("Could not find a tag with that name!");
                     return false;
                 }
 
-                DiscordUtils.successReact(bot, message);
-                DiscordUtils.sendMessage(channel, record.getResponse());
+                message.reactSuccess();
+                channel.sendMessage(record.getResponse());
         }
 
 

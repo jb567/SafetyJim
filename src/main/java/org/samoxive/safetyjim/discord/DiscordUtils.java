@@ -10,6 +10,11 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import org.samoxive.jooq.generated.tables.records.SettingsRecord;
 import org.samoxive.safetyjim.database.DatabaseUtils;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordChannel;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordGuild;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordMessage;
+import org.samoxive.safetyjim.discord.entities.wrapper.DiscordUser;
+import org.samoxive.safetyjim.helpers.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,16 +26,10 @@ import java.util.stream.Collectors;
 
 public class DiscordUtils {
     private static final Logger log = LoggerFactory.getLogger(DiscordUtils.class);
-    private static final String[] botListIds = {"110373943822540800", // DiscordBots
-                                                "264445053596991498", // DiscordBotList
-                                                "297462937646530562", // NovoBotList
-                                                "330777295952543744", // terminal.ink
-                                                "276011076552753153",
-                                               };
     private static final String SUCCESS_EMOTE_ID = "322698554294534144";
-    private static final String SUCCESS_EMOTE_NAME = "jimsuccess";
+    public static final String SUCCESS_EMOTE_NAME = "jimsuccess";
     private static final String FAIL_EMOTE_ID = "322698553980092417";
-    private static final String FAIL_EMOTE_NAME = "jimfail";
+    public static final String FAIL_EMOTE_NAME = "jimfail";
     private static Emote SUCCESS_EMOTE;
     private static Emote FAIL_EMOTE;
 
@@ -58,34 +57,32 @@ public class DiscordUtils {
         modLogActionTexts.put("mute", "Mute");
     }
 
-    public static void createModLogEntry(DiscordBot bot, JDA shard, Message message, Member member, String reason, String action, int id, Date expirationDate, boolean expires) {
-        SettingsRecord guildSettings = DatabaseUtils.getGuildSettings(bot.getDatabase(), member.getGuild());
+
+    public static void createModLogEntry(DiscordBot bot, DiscordGuild guild, DiscordMessage msg, DiscordUser banned, DiscordUser banner, String reason, String action, int id, Date expirationDate, boolean expires) {
+        SettingsRecord guildSettings = guild.getSettings(bot);
+
         Date now = new Date();
 
-        boolean modLogActive = guildSettings.getModlog();
-        String prefix = guildSettings.getPrefix();
+        boolean usingModLog = guildSettings.getModlog();
 
-        if (!modLogActive) {
+        if (!usingModLog)
             return;
-        }
 
-        TextChannel modLogChannel = shard.getTextChannelById(guildSettings.getModlogchannelid());
+        DiscordChannel modLogChannel = guild.getModLogChannel(bot);
 
         if (modLogChannel == null) {
-            sendMessage(message.getChannel(), "Invalid moderator log channel in guild configuration, set a proper one via `" + prefix + " settings` command.");
+            String prefix = guildSettings.getPrefix();
+            msg.getChannel().sendMessage("Invalid moderator log channel in guild configuration, set a proper one via `" + prefix + " settings` command.");
             return;
         }
-
-        EmbedBuilder embed = new EmbedBuilder();
-        User user = member.getUser();
-        TextChannel channel = message.getTextChannel();
-        embed.setColor(modLogColors.get(action));
-        embed.addField("Action ", modLogActionTexts.get(action) + " - #" + id, false);
-        embed.addField("User:", getUserTagAndId(user), false);
-        embed.addField("Reason:", TextUtils.truncateForEmbed(reason), false);
-        embed.addField("Responsible Moderator:", getUserTagAndId(message.getAuthor()), false);
-        embed.addField("Channel", getChannelMention(channel), false);
-        embed.setTimestamp(now.toInstant());
+        EmbedBuilder embed = new EmbedBuilder()
+            .setColor(modLogColors.get(action))
+            .addField("Action ", modLogActionTexts.get(action) + " - #" + id, false)
+            .addField("User:", banned.getTagAndId(), false)
+            .addField("Reason:", TextUtils.truncateForEmbed(reason), false)
+            .addField("Responsible Moderator:", banner.getTagAndId(), false)
+            .addField("Channel", msg.getChannel().getMention(), false)
+            .setTimestamp(now.toInstant());
 
         if (expires) {
             String dateText = expirationDate == null ? "Indefinitely" : expirationDate.toString();
@@ -104,69 +101,21 @@ public class DiscordUtils {
 
             embed.addField(untilText, dateText, false);
         }
-
-        sendMessage(modLogChannel, embed.build());
+        modLogChannel.sendMessage(embed.build());
     }
 
-    public static void deleteCommandMessage(DiscordBot bot, Message message) {
-        boolean silentCommandsActive = DatabaseUtils.getGuildSettings(bot.getDatabase(), message.getGuild()).getSilentcommands();
+    public static void deleteCommandMessage(DiscordBot bot, DiscordGuild guild, DiscordMessage message) {
+        boolean silentCommandsActive = guild.getSettings(bot).getSilentcommands();
 
         if (!silentCommandsActive) {
             return;
         }
 
         try {
-            message.delete().complete();
+            message.futureDelete().complete();
         } catch (Exception e) {
             //
         }
-    }
-
-    public static boolean isKickable(Member toKick, Member kicker) {
-        return isBannable(toKick, kicker);
-    }
-
-    public static boolean isBannable(Member toBan, Member banner) {
-        Guild guild = toBan.getGuild();
-        User toBanUser = toBan.getUser();
-        User bannerUser = banner.getUser();
-
-        // Users can't ban themselves
-        if (bannerUser.getId().equals(toBanUser.getId())) {
-            return false;
-        }
-
-        // Owners cannot be banned
-        String ownerId = guild.getOwner().getUser().getId();
-        if (ownerId.equals(toBanUser.getId())) {
-            return false;
-        }
-
-        Role highestRoleToBan = getHighestRole(toBan);
-        Role highestRoleBanner = getHighestRole(banner);
-
-        // If either of these variables are null, this means they have no roles
-        // If the person we are trying to ban has no roles, there are two possibilities
-        // Either banner also doesn't have a role, in which case both users are equal
-        // and banner doesn't have the power to ban, or banner has a role which will
-        // always equal to being above the to be banned user
-        if (highestRoleToBan == null || highestRoleBanner == null) {
-            return highestRoleBanner != null;
-        }
-
-        return highestRoleToBan.getPosition() < highestRoleBanner.getPosition();
-    }
-
-    public static boolean isBotFarm(Guild guild) {
-        for (String botList: botListIds) {
-            if (guild.getId().equals(botList)) {
-                return false;
-            }
-        }
-
-        int botCount = (int)guild.getMembers().stream().filter(member -> member.getUser().isBot()).count();
-        return botCount > 20;
-
     }
 
     public static boolean isOnline(Member member) {
@@ -175,10 +124,6 @@ public class DiscordUtils {
         return (status == OnlineStatus.ONLINE) ||
                (status == OnlineStatus.DO_NOT_DISTURB) ||
                (status == OnlineStatus.IDLE);
-    }
-
-    public static boolean isUserInGuild(Guild guild, String userId) {
-        return guild.getMemberById(userId) != null;
     }
 
     public static boolean isGuildTalkable(Guild guild) {
@@ -192,11 +137,6 @@ public class DiscordUtils {
 
     public static void successReact(DiscordBot bot, Message message) {
         reactToMessage(bot, message, SUCCESS_EMOTE_NAME, SUCCESS_EMOTE_ID);
-    }
-
-    public static void failMessage(DiscordBot bot, Message message, String errorMessage) {
-        failReact(bot, message);
-        sendMessage(message.getTextChannel(), errorMessage);
     }
 
     public static void failReact(DiscordBot bot, Message message) {
@@ -233,15 +173,6 @@ public class DiscordUtils {
     public static void sendMessage(MessageChannel channel, MessageEmbed embed) {
         try {
             channel.sendMessage(embed).queue();
-        } catch (Exception e) {
-            //
-        }
-    }
-
-    public static void sendDM(User user, String message) {
-        try {
-            PrivateChannel channel = user.openPrivateChannel().complete();
-            sendMessage(channel, message);
         } catch (Exception e) {
             //
         }
@@ -328,30 +259,6 @@ public class DiscordUtils {
         return (idLong >>> TIMESTAMP_OFFSET) + DISCORD_EPOCH;
     }
 
-    public static String getChannelMention(MessageChannel channel) {
-        return "<#" + channel.getId() + ">";
-    }
-
-    public static String getUserTagAndId(User user) {
-        return getTag(user) + " (" + user.getId() + ")";
-    }
-
-    public static Role getHighestRole(Member member) {
-        List<Role> roles = member.getRoles();
-
-        if (roles.size() == 0) {
-            return null;
-        }
-
-        return roles.stream().reduce(((prev, next) -> {
-            if (prev != null) {
-                return next.getPosition() > prev.getPosition() ? next : prev;
-            } else {
-                return next;
-            }
-        })).get();
-    }
-
     public static String getUsageString(String prefix, String[] usages) {
         StringJoiner joiner = new StringJoiner("\n");
 
@@ -404,5 +311,23 @@ public class DiscordUtils {
 
         int shardId = getShardIdFromGuildId(guildIdLong, shards.size());
         return shards.get(shardId).getShard().getGuildById(guildId);
+    }
+
+
+
+    public static Pair<Boolean,Pair<String,Date>> parseReasonAndTime(Scanner messageIterator, DiscordMessage message) {
+        Pair<String, Date> parsedReasonAndTime;
+
+        try {
+            parsedReasonAndTime = TextUtils.getTextAndTime(messageIterator);
+        } catch (TextUtils.InvalidTimeInputException e) {
+            message.fail("Invalid time argument. Please try again.");
+            return Pair.of(false,null);
+        } catch (TextUtils.TimeInputInPastException e) {
+            message.fail("Your time argument was set for the past. Try again.\n" +
+                    "If you're specifying a date, e.g. `30 December`, make sure you also write the year.");
+            return Pair.of(false,null);
+        }
+        return Pair.of(true, parsedReasonAndTime);
     }
 }
